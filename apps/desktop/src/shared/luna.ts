@@ -18,6 +18,8 @@ export interface LunaSnapshot {
   mode: AssistantMode
   /** Последний ответ Луны (в фазе 1 — заглушка, пока не подключена модель). */
   reply: string | null
+  /** Что прочитано с экрана для последнего запроса, или почему не прочитано. */
+  screenNote: string | null
 }
 
 export const IPC = {
@@ -28,7 +30,8 @@ export const IPC = {
   hidePanel: 'luna:hide-panel',
   action: 'luna:action',
   submit: 'luna:submit',
-  dragBy: 'luna:drag-by'
+  dragBy: 'luna:drag-by',
+  stop: 'luna:stop'
 } as const
 
 /** API, который мост открывает интерфейсу через window.luna. */
@@ -41,4 +44,5 @@ export interface LunaAPI {
   action(id: MenuActionId): void
   submit(text: string): void
   dragBy(dx: number, dy: number): void
+  stop(): void
 }

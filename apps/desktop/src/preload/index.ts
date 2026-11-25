@@ -21,7 +21,8 @@ const luna: LunaAPI = {
   hidePanel: () => ipcRenderer.send(IPC.hidePanel),
   action: (id: MenuActionId) => ipcRenderer.send(IPC.action, id),
   submit: (text: string) => ipcRenderer.send(IPC.submit, text),
-  dragBy: (dx: number, dy: number) => ipcRenderer.send(IPC.dragBy, dx, dy)
+  dragBy: (dx: number, dy: number) => ipcRenderer.send(IPC.dragBy, dx, dy),
+  stop: () => ipcRenderer.send(IPC.stop)
 }
 
 contextBridge.exposeInMainWorld('luna', luna)

@@ -400,3 +400,25 @@ input {
     transition-duration: 0.001ms !important;
   }
 }
+
+.input-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stop {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  background: rgba(248, 113, 113, 0.12);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.screen-note {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 2px;
+}

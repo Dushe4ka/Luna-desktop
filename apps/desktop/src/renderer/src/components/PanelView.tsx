@@ -46,7 +46,11 @@ export default function PanelView() {
       {view === 'menu' ? (
         <GlassMenu mode={snapshot?.mode ?? 'assist'} />
       ) : (
-        <InputPanel reply={snapshot?.reply ?? null} state={snapshot?.state ?? 'idle'} />
+        <InputPanel
+          reply={snapshot?.reply ?? null}
+          state={snapshot?.state ?? 'idle'}
+          screenNote={snapshot?.screenNote ?? null}
+        />
       )}
     </div>
   )
@@ -80,7 +84,16 @@ function GlassMenu({ mode }: { mode: LunaSnapshot["mode"] }) {
   )
 }
 
-function InputPanel({ reply, state }: { reply: string | null; state: LunaSnapshot['state'] }) {
+function InputPanel({
+  reply,
+  state,
+  screenNote
+}: {
+  reply: string | null
+  state: LunaSnapshot['state']
+  screenNote: string | null
+}) {
+  const busy = state === 'thinking' || state === 'acting'
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -102,7 +115,13 @@ function InputPanel({ reply, state }: { reply: string | null; state: LunaSnapsho
     <div className="input">
       <div className="input-head">
         <span className="eyebrow">Луна · {state === 'thinking' ? 'думаю' : 'текст'}</span>
+        {busy && (
+          <button className="stop" onClick={() => window.luna.stop()}>
+            Стоп
+          </button>
+        )}
       </div>
+      {screenNote && <div className="screen-note">{screenNote}</div>}
       <div className="reply" aria-live="polite">
         {reply ? reply : <span className="muted">Напишите запрос. Голос подключим позже.</span>}
       </div>

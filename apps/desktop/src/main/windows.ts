@@ -59,6 +59,8 @@ function makeOverlayWindow(width: number, height: number): BrowserWindow {
 export function createOrbWindow(): BrowserWindow {
   const area = screen.getPrimaryDisplay().workArea
   orbWindow = makeOverlayWindow(ORB_WINDOW, ORB_WINDOW)
+  // Клик по значку не должен переносить фокус: окно, с которым работает пользователь, запоминаем точно.
+  orbWindow.setFocusable(false)
   const x = area.x + area.width - ORB_VISUAL - EDGE_OFFSET - ORB_INSET
   const y = area.y + EDGE_OFFSET - ORB_INSET
   orbWindow.setPosition(Math.round(x), Math.round(y))
