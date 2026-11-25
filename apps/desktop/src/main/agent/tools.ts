@@ -17,15 +17,33 @@ export const TOOLS: ToolSpec[] = [
       required: ['app'],
       additionalProperties: false
     }
+  },
+  {
+    name: 'type_text',
+    description:
+      'Ввести текст в поле ввода приложения, с которым работает пользователь. Используй, только если пользователь явно попросил написать или вставить текст. Текст не отправляется: кнопку отправки нажимает пользователь.',
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Текст, который нужно ввести' }
+      },
+      required: ['text'],
+      additionalProperties: false
+    }
   }
 ]
 
 /** Инструменты, которые что-то меняют на компьютере. */
-export const ACTION_TOOLS = new Set(['open_app'])
+export const ACTION_TOOLS = new Set(['open_app', 'type_text'])
 
 /** Понятное описание действия для карточки подтверждения. */
-export function describeAction(name: string, args: Record<string, unknown>): string {
+export function describeAction(name: string, args: Record<string, unknown>, targetApp: string | null): string {
   if (name === 'open_app') return `Открыть приложение «${String(args.app ?? '')}»`
+  if (name === 'type_text') {
+    const text = String(args.text ?? '')
+    const preview = text.length > 80 ? text.slice(0, 80) + '…' : text
+    return `Ввести текст «${preview}» в «${targetApp ?? 'окно'}»`
+  }
   return `Действие «${name}»`
 }
 

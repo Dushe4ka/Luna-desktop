@@ -21,6 +21,8 @@ export interface TurnOptions {
   userText: string
   /** Инструменты, которые можно предлагать (пустой список — только текст). */
   tools: ToolSpec[]
+  /** Приложение, в котором будет действие (для описания в подтверждении). */
+  targetApp: string | null
   onDelta: (fullTextSoFar: string) => void
   /** Спрашивает пользователя перед действием. true — разрешил. */
   requestApproval: (request: ApprovalRequest) => Promise<boolean>
@@ -36,7 +38,7 @@ export interface TurnOptions {
  * Возвращает итоговый текст ответа.
  */
 export async function runTurn(options: TurnOptions): Promise<string> {
-  const { provider, role, history, userText, tools, onDelta, requestApproval, runTool, onEvent, signal } = options
+  const { provider, role, history, userText, tools, targetApp, onDelta, requestApproval, runTool, onEvent, signal } = options
   history.push({ role: 'user', content: userText })
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt(role) },
@@ -62,7 +64,7 @@ export async function runTurn(options: TurnOptions): Promise<string> {
 
       messages.push({ role: 'assistant', content: text, toolCalls: calls })
       for (const call of calls) {
-        const result = await handleCall(call, known, requestApproval, runTool, onEvent)
+        const result = await handleCall(call, known, targetApp, requestApproval, runTool, onEvent)
         messages.push({ role: 'tool', content: result, toolCallId: call.id })
       }
     }
@@ -77,6 +79,7 @@ export async function runTurn(options: TurnOptions): Promise<string> {
 async function handleCall(
   call: { id: string; name: string; arguments: string },
   known: Set<string>,
+  targetApp: string | null,
   requestApproval: TurnOptions['requestApproval'],
   runTool: TurnOptions['runTool'],
   onEvent: TurnOptions['onEvent']
@@ -95,9 +98,13 @@ async function handleCall(
     onEvent('tool_invalid', 'open_app: некорректное имя приложения')
     return 'Некорректное имя приложения.'
   }
+  if (call.name === 'type_text' && !String(args.text ?? '').trim()) {
+    onEvent('tool_invalid', 'type_text: пустой текст')
+    return 'Текст пустой.'
+  }
   if (!ACTION_TOOLS.has(call.name)) return runTool(call.name, args)
 
-  const description = describeAction(call.name, args)
+  const description = describeAction(call.name, args, targetApp)
   onEvent('tool_proposed', description)
   const allowed = await requestApproval({ id: call.id, name: call.name, args, description })
   if (!allowed) {
