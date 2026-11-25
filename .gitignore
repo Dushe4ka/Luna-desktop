@@ -1,0 +1,27 @@
+# Секреты и ключи
+.env
+.env.*
+*.key
+*.pem
+credentials*
+secrets*
+**/credentials.toml
+
+# Память и данные пользователя (локальные)
+.luna/
+memory/
+*.sqlite
+*.sqlite-journal
+*.db
+
+# Журналы и кэш
+logs/
+*.log
+.cache/
+
+# Зависимости и сборка
+node_modules/
+dist/
+out/
+build/
+.DS_Store
