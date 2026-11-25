@@ -11,11 +11,19 @@ import {
 } from './windows'
 import {
   IPC,
+  type AssistantMode,
   type LunaSnapshot,
   type MenuActionId,
-  type AssistantMode,
   type OrbState
 } from '../shared/luna'
+import {
+  createProvider,
+  pickRole,
+  readProviderConfig,
+  runTurn,
+  type ChatMessage,
+  type ModelProvider
+} from './agent'
 
 /** Горячая клавиша открытия ввода. В Electron это Option+Space на macOS. */
 const HOTKEY = 'Alt+Space'
@@ -24,6 +32,12 @@ const MODES: AssistantMode[] = ['observe', 'assist', 'autopilot']
 
 let snapshot: LunaSnapshot = { state: 'idle', mode: 'assist', reply: null }
 let listenTimer: NodeJS.Timeout | null = null
+
+/** Диалог в памяти процесса. Сохранение между запусками — в фазе 4. */
+const history: ChatMessage[] = []
+let provider: ModelProvider | null = null
+let providerError: string | null = null
+let activeTurn: AbortController | null = null
 
 /** Рассылает состояние во все окна. */
 function broadcast(): void {
@@ -41,21 +55,66 @@ function setState(state: OrbState): void {
   update({ state })
 }
 
-/**
- * Заглушка ответа: в фазе 1 модели ещё нет.
- * Нужна только для проверки состояний значка и панели.
- */
-function submit(text: string): void {
+/** Провайдер создаём один раз; ошибка настройки показывается пользователю, а не падает приложение. */
+function getProvider(): ModelProvider | null {
+  if (provider || providerError) return provider
+  try {
+    provider = createProvider(readProviderConfig(process.env))
+  } catch (error) {
+    providerError = error instanceof Error ? error.message : String(error)
+  }
+  return provider
+}
+
+function friendlyError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/abort/i.test(message)) return ''
+  if (/401|invalid_api_key|incorrect api key/i.test(message)) {
+    return 'Ключ провайдера не принят. Проверьте ключ в настройках.'
+  }
+  if (/ECONNREFUSED|fetch failed|connect/i.test(message)) {
+    return 'Не удалось подключиться к модели. Для локальной модели проверьте, что Ollama запущен.'
+  }
+  return `Ошибка модели: ${message.slice(0, 200)}`
+}
+
+/** Отправляет запрос агенту и стримит ответ в панель и значок. */
+async function submit(text: string): Promise<void> {
   const trimmed = text.trim()
   if (!trimmed) return
+
+  activeTurn?.abort()
+  const controller = new AbortController()
+  activeTurn = controller
+
+  const current = getProvider()
+  if (!current) {
+    update({ state: 'error', reply: providerError ?? 'Модель не настроена.' })
+    return
+  }
+
+  const role = pickRole(trimmed)
   setState('thinking')
-  update({ reply: null })
-  setTimeout(() => {
-    update({
-      state: 'idle',
-      reply: `Модель пока не подключена. Вы написали: «${trimmed}»`
+  update({ reply: '' })
+
+  try {
+    await runTurn({
+      provider: current,
+      role,
+      history,
+      userText: trimmed,
+      signal: controller.signal,
+      onDelta: (fullText) => update({ reply: fullText, state: 'acting' })
     })
-  }, 1200)
+    if (activeTurn === controller) {
+      activeTurn = null
+      update({ state: 'idle' })
+    }
+  } catch (error) {
+    if (activeTurn === controller) activeTurn = null
+    const message = friendlyError(error)
+    if (message) update({ state: 'error', reply: message })
+  }
 }
 
 function runAction(id: MenuActionId): void {
@@ -103,7 +162,7 @@ function registerIpc(): void {
   ipcMain.on(IPC.openPanel, (_event, view: 'menu' | 'input') => showPanel(view))
   ipcMain.on(IPC.hidePanel, () => hidePanel())
   ipcMain.on(IPC.action, (_event, id: MenuActionId) => runAction(id))
-  ipcMain.on(IPC.submit, (_event, text: string) => submit(text))
+  ipcMain.on(IPC.submit, (_event, text: string) => void submit(text))
   ipcMain.on(IPC.dragBy, (_event, dx: number, dy: number) => dragBy(dx, dy))
 }
 
