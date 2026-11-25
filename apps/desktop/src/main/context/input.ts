@@ -78,3 +78,22 @@ export function typeIntoRef(ref: string, text: string): Promise<boolean> {
     child.stdin.end(text, 'utf8')
   })
 }
+
+/** Нажимает клавишу в окне. Только клавиши из белого списка проверяются вызывающим кодом. */
+export function pressInWindow(key: string, windowId: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile(
+      'agent-desktop',
+      ['--headed', 'press', key, '--window-id', windowId],
+      { timeout: 15000 },
+      (error, stdout) => {
+        if (error && !stdout) return resolve(false)
+        try {
+          resolve((JSON.parse(stdout) as { ok: boolean }).ok)
+        } catch {
+          resolve(false)
+        }
+      }
+    )
+  })
+}

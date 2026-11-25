@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { findEditable, MAX_TEXT_CHARS, typeIntoRef } from '../context/input'
+import { findEditable, MAX_TEXT_CHARS, pressInWindow, typeIntoRef } from '../context/input'
 
 /** Выполнение действий на компьютере через agent-desktop. Вызывается только после подтверждения. */
 export interface ActionContext {
@@ -9,6 +9,7 @@ export interface ActionContext {
 
 export function executeAction(name: string, args: Record<string, unknown>, ctx: ActionContext): Promise<string> {
   if (name === 'type_text') return typeText(String(args.text ?? ''), ctx)
+  if (name === 'press_key') return pressKey(String(args.key ?? ''), ctx)
   if (name !== 'open_app') return Promise.resolve(`Неизвестное действие: ${name}`)
   const app = String(args.app ?? '').trim()
   return new Promise((resolve) => {
@@ -32,4 +33,10 @@ async function typeText(text: string, ctx: ActionContext): Promise<string> {
   if (!field) return `В окне «${ctx.foreground.app}» не нашла поле для ввода. Щёлкните в поле и повторите.`
   const ok = await typeIntoRef(field.ref, text)
   return ok ? `Текст введён в «${ctx.foreground.app}».` : `Не удалось ввести текст в «${ctx.foreground.app}».`
+}
+
+async function pressKey(key: string, ctx: ActionContext): Promise<string> {
+  if (!ctx.foreground) return 'Не знаю, в каком окне нажать клавишу.'
+  const ok = await pressInWindow(key, ctx.foreground.windowId)
+  return ok ? `Клавиша «${key}» нажата в «${ctx.foreground.app}».` : `Не удалось нажать «${key}» в «${ctx.foreground.app}».`
 }

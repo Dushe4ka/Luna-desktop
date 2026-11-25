@@ -1,4 +1,4 @@
-import { ACTION_TOOLS, describeAction, isSafeAppName } from './tools'
+import { ACTION_TOOLS, ALLOWED_KEYS, describeAction, isSafeAppName } from './tools'
 import { systemPrompt } from './roles'
 import type { ChatMessage, ModelProvider, RoleId, ToolCall, ToolSpec } from './types'
 
@@ -101,6 +101,10 @@ async function handleCall(
   if (call.name === 'open_app' && !isSafeAppName(String(args.app ?? ''))) {
     onEvent('tool_invalid', 'open_app: некорректное имя приложения')
     return 'Некорректное имя приложения.'
+  }
+  if (call.name === 'press_key' && !(ALLOWED_KEYS as readonly string[]).includes(String(args.key ?? ''))) {
+    onEvent('tool_invalid', 'press_key: клавиша не разрешена')
+    return 'Эта клавиша не разрешена.'
   }
   if (call.name === 'type_text' && !String(args.text ?? '').trim()) {
     onEvent('tool_invalid', 'type_text: пустой текст')
