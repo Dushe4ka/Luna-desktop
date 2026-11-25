@@ -577,3 +577,32 @@ input {
   font-size: 11px;
   cursor: pointer;
 }
+
+/* Полный доступ: постоянный пунктирный контур и отдельный цвет точки на значке. */
+.orb[data-full='true'] .ring.r2 {
+  opacity: 0.8;
+  border-color: #f472b6;
+  border-style: dashed;
+}
+
+.orb[data-full='true'] .badge {
+  background: #f472b6;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.consent {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--fg);
+}
+
+.warn {
+  font-size: 12px;
+  color: #f472b6;
+}

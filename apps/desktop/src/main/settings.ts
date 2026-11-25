@@ -9,7 +9,8 @@ import { readSecret } from './secrets'
  * Ключи провайдеров сюда не пишем: они лежат в Keychain.
  */
 export type ProviderId = 'openai' | 'ollama'
-export type AccessMode = 'observe' | 'assist' | 'autopilot'
+export type AccessMode = 'observe' | 'assist'
+export type AccessLevel = 'ask' | 'safe' | 'allowlist' | 'full'
 
 export interface Settings {
   provider: ProviderId
@@ -17,17 +18,23 @@ export interface Settings {
   vaultDir: string
   excludedApps: string[]
   mode: AccessMode
+  accessLevel: AccessLevel
+  /** Записи вида "open_app:Calculator" для уровня «по списку». */
+  allowlist: string[]
 }
 
 const PROVIDERS: ProviderId[] = ['openai', 'ollama']
-const MODES: AccessMode[] = ['observe', 'assist', 'autopilot']
+const MODES: AccessMode[] = ['observe', 'assist']
+const LEVELS: AccessLevel[] = ['ask', 'safe', 'allowlist', 'full']
 
 export const DEFAULT_SETTINGS: Settings = {
   provider: 'openai',
   model: 'gpt-4.1-mini',
   vaultDir: join(homedir(), 'Documents', 'Obsidian Vault', 'Память Luna'),
   excludedApps: ['1Password', 'Bitwarden', 'Keychain Access', 'Связка ключей', 'Электронный ключ'],
-  mode: 'assist'
+  mode: 'assist',
+  accessLevel: 'ask',
+  allowlist: []
 }
 
 let filePath = ''
@@ -64,7 +71,12 @@ function sanitize(input: Settings): Settings {
       .map((a) => String(a).trim().slice(0, 80))
       .filter(Boolean)
       .slice(0, 50),
-    mode: MODES.includes(input.mode) ? input.mode : DEFAULT_SETTINGS.mode
+    mode: MODES.includes(input.mode) ? input.mode : DEFAULT_SETTINGS.mode,
+    accessLevel: LEVELS.includes(input.accessLevel) ? input.accessLevel : DEFAULT_SETTINGS.accessLevel,
+    allowlist: (Array.isArray(input.allowlist) ? input.allowlist : [])
+      .map((a) => String(a).trim().slice(0, 120))
+      .filter((a) => /^[a-z_]+:.+$/.test(a))
+      .slice(0, 100)
   }
 }
 

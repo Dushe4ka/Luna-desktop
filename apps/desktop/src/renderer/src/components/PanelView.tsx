@@ -13,8 +13,7 @@ const MENU_ITEMS: { id: MenuActionId; label: string; hint?: string; danger?: boo
 
 const MODE_LABELS: Record<LunaSnapshot['mode'], string> = {
   observe: 'Наблюдать',
-  assist: 'Помогать',
-  autopilot: 'Авто'
+  assist: 'Помогать'
 }
 
 /** Панель, которую открывают от значка: меню (правый клик) или ввод (клик). */
@@ -225,8 +224,14 @@ function MemoryView() {
 
 const MODE_OPTIONS: { value: SettingsData['mode']; label: string }[] = [
   { value: 'observe', label: 'Наблюдать (только чтение)' },
-  { value: 'assist', label: 'Помогать (с подтверждением)' },
-  { value: 'autopilot', label: 'Авто (пока как «помогать»)' }
+  { value: 'assist', label: 'Помогать' }
+]
+
+const LEVEL_OPTIONS: { value: SettingsData['accessLevel']; label: string; hint: string }[] = [
+  { value: 'ask', label: 'Спрашивать всегда', hint: 'Любое действие ждёт вашего «да».' },
+  { value: 'safe', label: 'Безопасные без вопросов', hint: 'Заметки и задачи без вопросов; действия на компьютере — с вопросом.' },
+  { value: 'allowlist', label: 'По списку', hint: 'Без вопросов только то, что вы добавили в список ниже.' },
+  { value: 'full', label: 'Полный доступ', hint: 'Все действия без вопросов, пока вы не отключите. Отправка всё равно спрашивает.' }
 ]
 
 /** Экран настроек: модель, Obsidian, исключённые приложения, режим и ключ OpenAI. */
@@ -235,6 +240,8 @@ function SettingsView() {
   const [status, setStatus] = useState<string>('')
   const [excludedDraft, setExcludedDraft] = useState('')
   const [keyDraft, setKeyDraft] = useState('')
+  const [consentFull, setConsentFull] = useState(false)
+  const [ruleDraft, setRuleDraft] = useState('')
 
   useEffect(() => {
     void window.luna.getSettings().then(setData)
@@ -242,10 +249,23 @@ function SettingsView() {
 
   if (!data) return <div className="menu" />
 
-  const save = async (patch: Partial<Omit<SettingsData, 'hasOpenAIKey'>>): Promise<void> => {
+  const save = async (patch: Partial<Omit<SettingsData, 'hasOpenAIKey'>> & { confirmFull?: boolean }): Promise<void> => {
     const next = await window.luna.saveSettings(patch)
     setData(next)
-    setStatus('Сохранено')
+    setStatus(next.accessLevel === 'full' ? 'Полный доступ включён' : 'Сохранено')
+  }
+
+  const chooseLevel = (level: SettingsData['accessLevel']): void => {
+    if (level === 'full' && data.accessLevel !== 'full') {
+      // Без галочки согласия полный доступ не включаем.
+      if (!consentFull) {
+        setStatus('Поставьте галочку согласия, чтобы включить полный доступ')
+        return
+      }
+      void save({ accessLevel: 'full', confirmFull: true })
+      return
+    }
+    void save({ accessLevel: level })
   }
 
   const saveKey = async (): Promise<void> => {
@@ -307,7 +327,7 @@ function SettingsView() {
           />
         </label>
         <label className="field">
-          <span>Режим доступа</span>
+          <span>Режим</span>
           <select value={data.mode} onChange={(e) => void save({ mode: e.target.value as SettingsData['mode'] })}>
             {MODE_OPTIONS.map((m) => (
               <option key={m.value} value={m.value}>
@@ -316,6 +336,58 @@ function SettingsView() {
             ))}
           </select>
         </label>
+        <div className="field">
+          <span>Уровень доступа</span>
+          <select value={data.accessLevel} onChange={(e) => chooseLevel(e.target.value as SettingsData['accessLevel'])}>
+            {LEVEL_OPTIONS.map((l) => (
+              <option key={l.value} value={l.value}>
+                {l.label}
+              </option>
+            ))}
+          </select>
+          <span className="hint">{LEVEL_OPTIONS.find((l) => l.value === data.accessLevel)?.hint}</span>
+          {data.accessLevel !== 'full' && (
+            <label className="consent">
+              <input type="checkbox" checked={consentFull} onChange={(e) => setConsentFull(e.target.checked)} />
+              Я понимаю: при полном доступе Луна выполняет действия без вопросов, пока я не отключу это.
+            </label>
+          )}
+          {data.accessLevel === 'full' && <div className="warn">Полный доступ включён. Значок показывает это постоянно.</div>}
+        </div>
+        {data.accessLevel === 'allowlist' && (
+          <div className="field">
+            <span>Разрешённые без вопросов (инструмент:приложение)</span>
+            <div className="chips">
+              {data.allowlist.map((rule) => (
+                <button
+                  key={rule}
+                  className="chip"
+                  onClick={() => void save({ allowlist: data.allowlist.filter((r) => r !== rule) })}
+                  aria-label={`Убрать правило ${rule}`}
+                >
+                  {rule} ×
+                </button>
+              ))}
+            </div>
+            <div className="row-inline">
+              <input
+                placeholder="open_app:Calculator"
+                value={ruleDraft}
+                onChange={(e) => setRuleDraft(e.target.value)}
+              />
+              <button
+                onClick={() => {
+                  const rule = ruleDraft.trim()
+                  if (/^[a-z_]+:.+$/.test(rule)) void save({ allowlist: [...data.allowlist, rule] })
+                  setRuleDraft('')
+                }}
+                disabled={!ruleDraft.trim()}
+              >
+                Добавить
+              </button>
+            </div>
+          </div>
+        )}
         <div className="field">
           <span>Не читать и не снимать</span>
           <div className="chips">

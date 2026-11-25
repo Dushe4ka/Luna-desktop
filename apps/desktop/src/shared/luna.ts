@@ -13,12 +13,14 @@ export interface SettingsData {
   model: string
   vaultDir: string
   excludedApps: string[]
-  mode: 'observe' | 'assist' | 'autopilot'
+  mode: 'observe' | 'assist'
+  accessLevel: 'ask' | 'safe' | 'allowlist' | 'full'
+  allowlist: string[]
   hasOpenAIKey: boolean
 }
 
 /** Режимы доступа из спеки (§6). В фазе 1 это только переключатель отображения. */
-export type AssistantMode = 'observe' | 'assist' | 'autopilot'
+export type AssistantMode = 'observe' | 'assist'
 
 /** Действия из стеклянного меню. */
 export type MenuActionId = 'history' | 'text' | 'listen' | 'mode' | 'settings' | 'pause' | 'quit'
@@ -51,6 +53,8 @@ export interface LunaSnapshot {
   mode: AssistantMode
   /** Последний ответ Луны (в фазе 1 — заглушка, пока не подключена модель). */
   reply: string | null
+  /** Полный доступ включён (показываем на значке). */
+  fullAccess: boolean
   /** Что прочитано с экрана для последнего запроса, или почему не прочитано. */
   screenNote: string | null
   /** Действие, которое ждёт решения пользователя, или null. */
@@ -90,6 +94,6 @@ export interface LunaAPI {
   listMemory(): Promise<MemorySnapshot>
   deleteMemory(kind: 'task' | 'memory', id: string): void
   getSettings(): Promise<SettingsData>
-  saveSettings(patch: Partial<Omit<SettingsData, 'hasOpenAIKey'>>): Promise<SettingsData>
+  saveSettings(patch: Partial<Omit<SettingsData, 'hasOpenAIKey'>> & { confirmFull?: boolean }): Promise<SettingsData>
   saveOpenAIKey(value: string): Promise<boolean>
 }

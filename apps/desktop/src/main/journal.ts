@@ -15,6 +15,7 @@ export type JournalKind =
   | 'approval_requested'
   | 'approval_granted'
   | 'approval_denied'
+  | 'approval_auto'
   | 'action_done'
   | 'action_failed'
   | 'stop'

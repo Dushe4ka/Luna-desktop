@@ -18,6 +18,7 @@ import {
   type OrbState
 } from '../shared/luna'
 import {
+  autoApprove,
   createProvider,
   executeAction,
   summarizeHistory,
@@ -50,9 +51,9 @@ import { READ_TOOLS } from './agent'
 /** Горячая клавиша открытия ввода. В Electron это Option+Space на macOS. */
 const HOTKEY = 'Alt+Space'
 
-const MODES: AssistantMode[] = ['observe', 'assist', 'autopilot']
+const MODES: AssistantMode[] = ['observe', 'assist']
 
-let snapshot: LunaSnapshot = { state: 'idle', mode: 'assist', reply: null, screenNote: null, approval: null }
+let snapshot: LunaSnapshot = { state: 'idle', mode: 'assist', reply: null, screenNote: null, approval: null, fullAccess: false }
 let listenTimer: NodeJS.Timeout | null = null
 /** Окно, с которым работал пользователь до вызова Луны. Запоминается при открытии панели. */
 let foreground: FocusedWindow | null = null
@@ -262,12 +263,22 @@ async function submit(text: string): Promise<void> {
       targetApp,
       images,
       memoryContext,
-      explicitMemory: explicitThisTurn,
+      canAutoApprove: (name, args) => {
+        const s = getSettings()
+        return autoApprove({
+          level: s.accessLevel,
+          allowlist: s.allowlist,
+          toolName: name,
+          args,
+          targetApp: foreground?.app ?? null,
+          explicitMemory: explicitThisTurn
+        })
+      },
       signal: controller.signal,
       onDelta: (fullText) => update({ reply: fullText, state: 'acting' }),
       requestApproval,
       runTool,
-      onEvent: (kind, detail) => journal({ kind, detail })
+      onEvent: (kind, detail) => journal({ kind: kind === 'tool_auto' ? 'approval_auto' : kind, detail })
     })
     if (activeTurn === controller) {
       activeTurn = null
@@ -368,16 +379,24 @@ function registerIpc(): void {
     const s = getSettings()
     return { ...s, hasOpenAIKey: await hasOpenAIKey() }
   })
-  ipcMain.handle(IPC.settingsSave, async (_event, patch: Partial<Settings>) => {
+  ipcMain.handle(IPC.settingsSave, async (_event, input: Partial<Settings> & { confirmFull?: boolean }) => {
     const before = getSettings()
+    const { confirmFull, ...patch } = input
+    // Полный доступ включается только с явным подтверждением (спека §6).
+    if (patch.accessLevel === 'full' && before.accessLevel !== 'full' && !confirmFull) {
+      delete patch.accessLevel
+    }
     const next = saveSettings(patch)
+    if (next.accessLevel !== before.accessLevel) {
+      journal({ kind: 'approval_auto', detail: `уровень доступа: ${next.accessLevel}` })
+    }
     // Что-то из настроек влияет на работу сразу.
     setExcludedApps(next.excludedApps)
     if (next.provider !== before.provider || next.model !== before.model) {
       provider = null
       providerError = null
     }
-    update({ mode: next.mode })
+    update({ mode: next.mode, fullAccess: next.accessLevel === 'full' })
     syncVault()
     return { ...next, hasOpenAIKey: await hasOpenAIKey() }
   })
@@ -415,7 +434,7 @@ app.whenReady().then(() => {
 
   const s = loadSettings()
   setExcludedApps(s.excludedApps)
-  snapshot = { ...snapshot, mode: s.mode }
+  snapshot = { ...snapshot, mode: s.mode, fullAccess: s.accessLevel === 'full' }
   store = new MemoryStore(join(app.getPath('userData'), 'memory.sqlite'))
   registerIpc()
   createOrbWindow()

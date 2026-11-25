@@ -27,15 +27,15 @@ export interface TurnOptions {
   images?: string[]
   /** Справка о памяти для системного промпта (не инструкции). */
   memoryContext?: string
-  /** Пользователь прямо попросил «запомни»: сохранение памяти без подтверждения. */
-  explicitMemory: boolean
+  /** Можно ли выполнить без вопроса (уровень доступа, список разрешённых, «запомни»). */
+  canAutoApprove: (name: string, args: Record<string, unknown>) => boolean
   onDelta: (fullTextSoFar: string) => void
   /** Спрашивает пользователя перед действием. true — разрешил. */
   requestApproval: (request: ApprovalRequest) => Promise<boolean>
   /** Выполняет подтверждённое действие и возвращает текст результата для модели. */
   runTool: (name: string, args: Record<string, unknown>) => Promise<string>
   /** Записывает событие в журнал. */
-  onEvent: (kind: 'tool_proposed' | 'tool_denied' | 'tool_invalid', detail: string) => void
+  onEvent: (kind: 'tool_proposed' | 'tool_denied' | 'tool_invalid' | 'tool_auto', detail: string) => void
   signal?: AbortSignal
 }
 
@@ -44,7 +44,7 @@ export interface TurnOptions {
  * Возвращает итоговый текст ответа.
  */
 export async function runTurn(options: TurnOptions): Promise<string> {
-  const { provider, role, history, userText, tools, targetApp, images, memoryContext, explicitMemory, onDelta, requestApproval, runTool, onEvent, signal } = options
+  const { provider, role, history, userText, tools, targetApp, images, memoryContext, canAutoApprove, onDelta, requestApproval, runTool, onEvent, signal } = options
   history.push({ role: 'user', content: userText })
   const messages: ChatMessage[] = [
     { role: 'system', content: memoryContext ? `${systemPrompt(role)}\n\n${memoryContext}` : systemPrompt(role) },
@@ -72,7 +72,7 @@ export async function runTurn(options: TurnOptions): Promise<string> {
 
       messages.push({ role: 'assistant', content: text, toolCalls: calls })
       for (const call of calls) {
-        const result = await handleCall(call, known, targetApp, explicitMemory, requestApproval, runTool, onEvent)
+        const result = await handleCall(call, known, targetApp, canAutoApprove, requestApproval, runTool, onEvent)
         messages.push({ role: 'tool', content: result, toolCallId: call.id })
       }
     }
@@ -88,7 +88,7 @@ async function handleCall(
   call: { id: string; name: string; arguments: string },
   known: Set<string>,
   targetApp: string | null,
-  explicitMemory: boolean,
+  canAutoApprove: TurnOptions['canAutoApprove'],
   requestApproval: TurnOptions['requestApproval'],
   runTool: TurnOptions['runTool'],
   onEvent: TurnOptions['onEvent']
@@ -116,10 +116,13 @@ async function handleCall(
     return 'Текст пустой.'
   }
   if (!ACTION_TOOLS.has(call.name)) return runTool(call.name, args)
-  // Явная просьба «запомни» — сохраняем без подтверждения. Без неё — карточка подтверждения.
-  if (call.name === 'remember' && explicitMemory) return runTool(call.name, args)
-
   const description = describeAction(call.name, args, targetApp)
+  // Уровень доступа решает, нужен ли вопрос. Отправка всегда спрашивает (см. access.ts).
+  if (canAutoApprove(call.name, args)) {
+    onEvent('tool_auto', description)
+    return runTool(call.name, args)
+  }
+
   onEvent('tool_proposed', description)
   const allowed = await requestApproval({ id: call.id, name: call.name, args, description })
   if (!allowed) {

@@ -58,9 +58,10 @@ export default function OrbView() {
       <div
         className="orb"
         data-state={state}
+        data-full={snapshot?.fullAccess ? 'true' : 'false'}
         role="button"
         tabIndex={0}
-        aria-label={`Луна: ${STATE_LABELS[state]}. Клик — ввод, правый клик — меню`}
+        aria-label={`Луна: ${STATE_LABELS[state]}${snapshot?.fullAccess ? ', полный доступ включён' : ''}. Клик — ввод, правый клик — меню`}
         onKeyDown={(e) => {
           if (e.key === 'Enter') window.luna.openPanel('input')
         }}
