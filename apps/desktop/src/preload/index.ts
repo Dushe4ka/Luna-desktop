@@ -22,7 +22,8 @@ const luna: LunaAPI = {
   action: (id: MenuActionId) => ipcRenderer.send(IPC.action, id),
   submit: (text: string) => ipcRenderer.send(IPC.submit, text),
   dragBy: (dx: number, dy: number) => ipcRenderer.send(IPC.dragBy, dx, dy),
-  stop: () => ipcRenderer.send(IPC.stop)
+  stop: () => ipcRenderer.send(IPC.stop),
+  decide: (id: string, allow: boolean) => ipcRenderer.send(IPC.decide, id, allow)
 }
 
 contextBridge.exposeInMainWorld('luna', luna)

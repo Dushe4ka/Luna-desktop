@@ -422,3 +422,38 @@ input {
   color: var(--muted);
   padding: 4px 2px;
 }
+
+.approval {
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+  font-size: 13px;
+}
+
+.approval-text {
+  margin-bottom: 8px;
+}
+
+.approval-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.approval-actions button {
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+}
+
+.approval-actions .allow {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.12);
+}
+
+.approval-actions .deny {
+  border-color: rgba(248, 113, 113, 0.5);
+}

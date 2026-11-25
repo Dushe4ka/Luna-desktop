@@ -3,14 +3,27 @@ import { appendFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
- * Журнал действий Луны (спека §4.1, §6). Пишет только факты: что прочитано и откуда,
- * сколько символов. Содержимое экрана и текст запросов в журнал не попадают.
+ * Журнал действий Луны (спека §4.1, §6). Пишет только факты: что предложено, что решил пользователь,
+ * что выполнено. Содержимое экрана и текст запросов в журнал не попадают.
  */
+export type JournalKind =
+  | 'read'
+  | 'read_refused'
+  | 'tool_proposed'
+  | 'tool_invalid'
+  | 'tool_denied'
+  | 'approval_requested'
+  | 'approval_granted'
+  | 'approval_denied'
+  | 'action_done'
+  | 'action_failed'
+  | 'stop'
+
 export interface JournalEntry {
-  kind: 'read' | 'read_refused' | 'stop' | 'answer'
-  app?: string
+  kind: JournalKind
+  /** Короткое описание: приложение, действие, причина. Без содержимого экрана. */
+  detail?: string
   chars?: number
-  reason?: string
 }
 
 let dir: string | null = null

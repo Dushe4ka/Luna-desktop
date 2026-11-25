@@ -50,6 +50,7 @@ export default function PanelView() {
           reply={snapshot?.reply ?? null}
           state={snapshot?.state ?? 'idle'}
           screenNote={snapshot?.screenNote ?? null}
+          approval={snapshot?.approval ?? null}
         />
       )}
     </div>
@@ -87,13 +88,15 @@ function GlassMenu({ mode }: { mode: LunaSnapshot["mode"] }) {
 function InputPanel({
   reply,
   state,
-  screenNote
+  screenNote,
+  approval
 }: {
   reply: string | null
   state: LunaSnapshot['state']
   screenNote: string | null
+  approval: LunaSnapshot['approval']
 }) {
-  const busy = state === 'thinking' || state === 'acting'
+  const busy = state === 'thinking' || state === 'acting' || state === 'approval'
   const [text, setText] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -122,6 +125,19 @@ function InputPanel({
         )}
       </div>
       {screenNote && <div className="screen-note">{screenNote}</div>}
+      {approval && (
+        <div className="approval" role="alertdialog" aria-label="Подтверждение действия">
+          <div className="approval-text">Луна хочет: {approval.description}</div>
+          <div className="approval-actions">
+            <button className="allow" onClick={() => window.luna.decide(approval.id, true)}>
+              Разрешить
+            </button>
+            <button className="deny" onClick={() => window.luna.decide(approval.id, false)}>
+              Отклонить
+            </button>
+          </div>
+        </div>
+      )}
       <div className="reply" aria-live="polite">
         {reply ? reply : <span className="muted">Напишите запрос. Голос подключим позже.</span>}
       </div>

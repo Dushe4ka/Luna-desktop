@@ -20,6 +20,8 @@ export interface LunaSnapshot {
   reply: string | null
   /** Что прочитано с экрана для последнего запроса, или почему не прочитано. */
   screenNote: string | null
+  /** Действие, которое ждёт решения пользователя, или null. */
+  approval: { id: string; description: string } | null
 }
 
 export const IPC = {
@@ -31,7 +33,8 @@ export const IPC = {
   action: 'luna:action',
   submit: 'luna:submit',
   dragBy: 'luna:drag-by',
-  stop: 'luna:stop'
+  stop: 'luna:stop',
+  decide: 'luna:decide'
 } as const
 
 /** API, который мост открывает интерфейсу через window.luna. */
@@ -45,4 +48,5 @@ export interface LunaAPI {
   submit(text: string): void
   dragBy(dx: number, dy: number): void
   stop(): void
+  decide(id: string, allow: boolean): void
 }
