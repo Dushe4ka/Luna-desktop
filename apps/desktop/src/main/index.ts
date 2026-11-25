@@ -29,11 +29,12 @@ import {
   type ChatMessage,
   type ModelProvider
 } from './agent'
-import { readSecret } from './secrets'
+import { readSecret, saveSecret } from './secrets'
 import {
   captureWindow,
   findFocusedWindow,
   isExcludedApp,
+  setExcludedApps,
   readFocusedWindow,
   wantsScreen,
   type FocusedWindow
@@ -42,8 +43,8 @@ import { journal } from './journal'
 import { MemoryStore } from './memory/store'
 import { buildMemoryContext, isExplicitMemoryRequest } from './memory/policy'
 import { writeVault } from './memory/vault'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { getSettings, hasOpenAIKey, loadSettings, saveSettings, type Settings } from './settings'
 import { READ_TOOLS } from './agent'
 
 /** Горячая клавиша открытия ввода. В Electron это Option+Space на macOS. */
@@ -63,8 +64,10 @@ let providerError: string | null = null
 let activeTurn: AbortController | null = null
 /** Память: SQLite в папке данных приложения. Открывается при запуске. */
 let store: MemoryStore | null = null
-/** Зеркало в Obsidian: папка «Память Luna» основного vault (решение автора). */
-const VAULT_DIR = process.env.LUNA_VAULT || join(homedir(), 'Documents', 'Obsidian Vault', 'Память Luna')
+/** Папка зеркала в Obsidian: из настроек; переменная LUNA_VAULT важнее (для разработки). */
+function vaultDir(): string {
+  return process.env.LUNA_VAULT || getSettings().vaultDir
+}
 /** Пользователь в этом запросе прямо сказал «запомни». */
 let explicitThisTurn = false
 /** Сводка старой части диалога (задача 4.8). */
@@ -95,7 +98,7 @@ function setState(state: OrbState): void {
 function syncVault(): void {
   if (!store) return
   try {
-    writeVault(VAULT_DIR, store.listTasks(500), store.listMemories(500))
+    writeVault(vaultDir(), store.listTasks(500), store.listMemories(500))
   } catch (error) {
     console.warn('Obsidian-зеркало не обновлено:', error instanceof Error ? error.message : error)
   }
@@ -119,7 +122,9 @@ function memoryAccess() {
 
 async function getProvider(): Promise<ModelProvider | null> {
   if (provider || providerError) return provider
-  const config = readProviderConfig(process.env)
+  // Настройки задают провайдер и модель; переменные окружения важнее (для разработки).
+  const s = getSettings()
+  const config = readProviderConfig({ LUNA_PROVIDER: s.provider, LUNA_MODEL: s.model, ...process.env })
   if (config.provider === 'openai' && !config.apiKey) {
     config.apiKey = (await readSecret('openai')) ?? ''
   }
@@ -303,7 +308,7 @@ function stopTurn(): void {
 }
 
 /** Запоминаем активное окно до того, как панель заберёт фокус. */
-async function openPanelFor(view: 'menu' | 'input' | 'memory'): Promise<void> {
+async function openPanelFor(view: 'menu' | 'input' | 'memory' | 'settings'): Promise<void> {
   if (!isPanelVisible()) {
     foreground = await findFocusedWindow().catch(() => null)
   }
@@ -324,6 +329,7 @@ function runAction(id: MenuActionId): void {
       return
     case 'mode': {
       const next = MODES[(MODES.indexOf(snapshot.mode) + 1) % MODES.length]
+      saveSettings({ mode: next })
       update({ mode: next })
       return
     }
@@ -335,8 +341,7 @@ function runAction(id: MenuActionId): void {
       void openPanelFor('memory')
       return
     case 'settings':
-      update({ reply: 'Настройки появятся позже.' })
-      void openPanelFor('input')
+      void openPanelFor('settings')
       return
     case 'quit':
       app.quit()
@@ -359,6 +364,34 @@ function registerIpc(): void {
     const db = store
     return db ? { tasks: db.listTasks(200), memories: db.listMemories(200) } : { tasks: [], memories: [] }
   })
+  ipcMain.handle(IPC.settingsGet, async () => {
+    const s = getSettings()
+    return { ...s, hasOpenAIKey: await hasOpenAIKey() }
+  })
+  ipcMain.handle(IPC.settingsSave, async (_event, patch: Partial<Settings>) => {
+    const before = getSettings()
+    const next = saveSettings(patch)
+    // Что-то из настроек влияет на работу сразу.
+    setExcludedApps(next.excludedApps)
+    if (next.provider !== before.provider || next.model !== before.model) {
+      provider = null
+      providerError = null
+    }
+    update({ mode: next.mode })
+    syncVault()
+    return { ...next, hasOpenAIKey: await hasOpenAIKey() }
+  })
+  ipcMain.handle(IPC.settingsKey, async (_event, value: string) => {
+    const key = String(value ?? '').trim()
+    // Простая проверка формата; сам ключ в логи и интерфейс не выводим.
+    if (!/^sk-[\w-]{20,}$/.test(key)) return false
+    const ok = await saveSecret('openai', key)
+    if (ok) {
+      provider = null
+      providerError = null
+    }
+    return ok
+  })
   ipcMain.on(IPC.memoryDelete, (_event, kind: 'task' | 'memory', id: string) => {
     if (!store) return
     if (kind === 'task') store.deleteTask(String(id))
@@ -380,6 +413,9 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  const s = loadSettings()
+  setExcludedApps(s.excludedApps)
+  snapshot = { ...snapshot, mode: s.mode }
   store = new MemoryStore(join(app.getPath('userData'), 'memory.sqlite'))
   registerIpc()
   createOrbWindow()

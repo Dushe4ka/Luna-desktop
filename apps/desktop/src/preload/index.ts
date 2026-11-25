@@ -25,7 +25,10 @@ const luna: LunaAPI = {
   stop: () => ipcRenderer.send(IPC.stop),
   decide: (id: string, allow: boolean) => ipcRenderer.send(IPC.decide, id, allow),
   listMemory: () => ipcRenderer.invoke(IPC.memoryList),
-  deleteMemory: (kind, id) => ipcRenderer.send(IPC.memoryDelete, kind, id)
+  deleteMemory: (kind, id) => ipcRenderer.send(IPC.memoryDelete, kind, id),
+  getSettings: () => ipcRenderer.invoke(IPC.settingsGet),
+  saveSettings: (patch) => ipcRenderer.invoke(IPC.settingsSave, patch),
+  saveOpenAIKey: (value: string) => ipcRenderer.invoke(IPC.settingsKey, value)
 }
 
 contextBridge.exposeInMainWorld('luna', luna)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { LunaSnapshot, MemorySnapshot, MenuActionId, PanelView as View } from '../../../shared/luna'
+import type { LunaSnapshot, MemorySnapshot, MenuActionId, PanelView as View, SettingsData } from '../../../shared/luna'
 
 const MENU_ITEMS: { id: MenuActionId; label: string; hint?: string; danger?: boolean }[] = [
   { id: 'history', label: 'Память и задачи', hint: '⌘H' },
@@ -45,6 +45,7 @@ export default function PanelView() {
     <div className="panel">
       {view === 'menu' && <GlassMenu mode={snapshot?.mode ?? 'assist'} />}
       {view === 'memory' && <MemoryView />}
+      {view === 'settings' && <SettingsView />}
       {view === 'input' && (
         <InputPanel
           reply={snapshot?.reply ?? null}
@@ -217,6 +218,136 @@ function MemoryView() {
             </button>
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+const MODE_OPTIONS: { value: SettingsData['mode']; label: string }[] = [
+  { value: 'observe', label: 'Наблюдать (только чтение)' },
+  { value: 'assist', label: 'Помогать (с подтверждением)' },
+  { value: 'autopilot', label: 'Авто (пока как «помогать»)' }
+]
+
+/** Экран настроек: модель, Obsidian, исключённые приложения, режим и ключ OpenAI. */
+function SettingsView() {
+  const [data, setData] = useState<SettingsData | null>(null)
+  const [status, setStatus] = useState<string>('')
+  const [excludedDraft, setExcludedDraft] = useState('')
+  const [keyDraft, setKeyDraft] = useState('')
+
+  useEffect(() => {
+    void window.luna.getSettings().then(setData)
+  }, [])
+
+  if (!data) return <div className="menu" />
+
+  const save = async (patch: Partial<Omit<SettingsData, 'hasOpenAIKey'>>): Promise<void> => {
+    const next = await window.luna.saveSettings(patch)
+    setData(next)
+    setStatus('Сохранено')
+  }
+
+  const saveKey = async (): Promise<void> => {
+    const ok = await window.luna.saveOpenAIKey(keyDraft)
+    setKeyDraft('')
+    setStatus(ok ? 'Ключ сохранён в Keychain' : 'Ключ не похож на ключ OpenAI (начинается с sk-)')
+    void window.luna.getSettings().then(setData)
+  }
+
+  return (
+    <div className="menu settings" role="region" aria-label="Настройки">
+      <div className="menu-head">
+        <span>Настройки</span>
+        <b>{status}</b>
+      </div>
+      <div className="settings-body">
+        <label className="field">
+          <span>Модель</span>
+          <select
+            value={data.provider}
+            onChange={(e) => {
+              const provider = e.target.value as SettingsData['provider']
+              // При смене провайдера подставляем его модель по умолчанию.
+              void save({ provider, model: provider === 'ollama' ? 'qwen3-vl:8b' : 'gpt-4.1-mini' })
+            }}
+          >
+            <option value="openai">OpenAI (облако)</option>
+            <option value="ollama">Ollama (на этом Mac)</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Название модели</span>
+          <input
+            key={`${data.provider}-${data.model}`}
+            defaultValue={data.model}
+            onBlur={(e) => e.target.value !== data.model && void save({ model: e.target.value })}
+          />
+        </label>
+        <div className="field">
+          <span>Ключ OpenAI</span>
+          <div className="row-inline">
+            <input
+              type="password"
+              placeholder={data.hasOpenAIKey ? 'Ключ сохранён — введите новый, чтобы заменить' : 'Вставьте ключ sk-…'}
+              value={keyDraft}
+              onChange={(e) => setKeyDraft(e.target.value)}
+              autoComplete="off"
+            />
+            <button onClick={() => void saveKey()} disabled={!keyDraft.trim()}>
+              Сохранить
+            </button>
+          </div>
+        </div>
+        <label className="field">
+          <span>Папка Obsidian (зеркало памяти)</span>
+          <input
+            defaultValue={data.vaultDir}
+            onBlur={(e) => e.target.value !== data.vaultDir && void save({ vaultDir: e.target.value })}
+          />
+        </label>
+        <label className="field">
+          <span>Режим доступа</span>
+          <select value={data.mode} onChange={(e) => void save({ mode: e.target.value as SettingsData['mode'] })}>
+            {MODE_OPTIONS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="field">
+          <span>Не читать и не снимать</span>
+          <div className="chips">
+            {data.excludedApps.map((app) => (
+              <button
+                key={app}
+                className="chip"
+                onClick={() => void save({ excludedApps: data.excludedApps.filter((a) => a !== app) })}
+                aria-label={`Убрать ${app} из исключений`}
+              >
+                {app} ×
+              </button>
+            ))}
+          </div>
+          <div className="row-inline">
+            <input
+              placeholder="Название приложения"
+              value={excludedDraft}
+              onChange={(e) => setExcludedDraft(e.target.value)}
+            />
+            <button
+              onClick={() => {
+                const name = excludedDraft.trim()
+                if (name) void save({ excludedApps: [...data.excludedApps, name] })
+                setExcludedDraft('')
+              }}
+              disabled={!excludedDraft.trim()}
+            >
+              Добавить
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   )

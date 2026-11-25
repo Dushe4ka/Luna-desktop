@@ -5,7 +5,17 @@
 export type OrbState = 'idle' | 'listening' | 'thinking' | 'acting' | 'approval' | 'error' | 'paused'
 
 /** Что показывает панель, которая открывается от значка. */
-export type PanelView = 'menu' | 'input' | 'memory'
+export type PanelView = 'menu' | 'input' | 'memory' | 'settings'
+
+/** Настройки для экрана. Ключ отдаём только признаком «сохранён». */
+export interface SettingsData {
+  provider: 'openai' | 'ollama'
+  model: string
+  vaultDir: string
+  excludedApps: string[]
+  mode: 'observe' | 'assist' | 'autopilot'
+  hasOpenAIKey: boolean
+}
 
 /** Режимы доступа из спеки (§6). В фазе 1 это только переключатель отображения. */
 export type AssistantMode = 'observe' | 'assist' | 'autopilot'
@@ -59,7 +69,10 @@ export const IPC = {
   stop: 'luna:stop',
   decide: 'luna:decide',
   memoryList: 'luna:memory-list',
-  memoryDelete: 'luna:memory-delete'
+  memoryDelete: 'luna:memory-delete',
+  settingsGet: 'luna:settings-get',
+  settingsSave: 'luna:settings-save',
+  settingsKey: 'luna:settings-key'
 } as const
 
 /** API, который мост открывает интерфейсу через window.luna. */
@@ -76,4 +89,7 @@ export interface LunaAPI {
   decide(id: string, allow: boolean): void
   listMemory(): Promise<MemorySnapshot>
   deleteMemory(kind: 'task' | 'memory', id: string): void
+  getSettings(): Promise<SettingsData>
+  saveSettings(patch: Partial<Omit<SettingsData, 'hasOpenAIKey'>>): Promise<SettingsData>
+  saveOpenAIKey(value: string): Promise<boolean>
 }

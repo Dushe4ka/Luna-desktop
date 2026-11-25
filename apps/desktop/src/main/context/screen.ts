@@ -10,7 +10,12 @@ import { join } from 'node:path'
  */
 
 /** Приложения, которые Луна никогда не читает. Потом настраивается пользователем. */
-export const EXCLUDED_APPS = ['1Password', 'Bitwarden', 'Keychain Access', 'Связка ключей', 'Электронный ключ']
+export let EXCLUDED_APPS: string[] = ['1Password', 'Bitwarden', 'Keychain Access', 'Связка ключей', 'Электронный ключ']
+
+/** Список меняется в настройках (см. settings.ts). */
+export function setExcludedApps(apps: string[]): void {
+  EXCLUDED_APPS = apps
+}
 
 /** Свои окна не читаем: иначе Луна увидит собственную панель. */
 const OWN_APPS = ['Electron', 'Luna', 'Luna Desktop']
