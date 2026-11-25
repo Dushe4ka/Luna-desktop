@@ -129,11 +129,15 @@ function InputPanel({
         <div className="approval" role="alertdialog" aria-label="Подтверждение действия">
           <div className="approval-text">Луна хочет: {approval.description}</div>
           <div className="approval-actions">
+            <button
+              className="deny"
+              autoFocus
+              onClick={() => window.luna.decide(approval.id, false)}
+            >
+              Отклонить
+            </button>
             <button className="allow" onClick={() => window.luna.decide(approval.id, true)}>
               Разрешить
-            </button>
-            <button className="deny" onClick={() => window.luna.decide(approval.id, false)}>
-              Отклонить
             </button>
           </div>
         </div>
