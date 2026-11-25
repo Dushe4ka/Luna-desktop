@@ -33,6 +33,7 @@ import {
 import { readSecret, saveSecret } from './secrets'
 import {
   captureWindow,
+  findAppWindow,
   findFocusedWindow,
   isExcludedApp,
   setExcludedApps,
@@ -175,9 +176,25 @@ async function runTool(name: string, args: Record<string, unknown>): Promise<str
     memory: memoryAccess(),
     explicitMemory: explicitThisTurn
   })
-  const failed = result.startsWith('Не удалось')
+  const failed = result.startsWith('Не удалось') || result.startsWith('Скрипт не выполнен')
   journal({ kind: failed ? 'action_failed' : 'action_done', detail: result })
+  // После открытия приложения его окно становится целью для следующего ввода текста.
+  if (name === 'open_app' && !failed) {
+    const app = String(args.app ?? '')
+    const win = await waitForAppWindow(app)
+    if (win) foreground = win
+  }
   return result
+}
+
+/** Ждём, пока открытое приложение покажет окно (до 6 секунд). */
+async function waitForAppWindow(app: string): Promise<FocusedWindow | null> {
+  for (let i = 0; i < 12; i++) {
+    const win = await findAppWindow(app).catch(() => null)
+    if (win) return win
+    await new Promise((r) => setTimeout(r, 500))
+  }
+  return null
 }
 
 /** Отправляет запрос агенту и стримит ответ. Экран читаем, только если запрос про него. */

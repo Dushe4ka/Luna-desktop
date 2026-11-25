@@ -146,3 +146,16 @@ export function wantsScreen(text: string): boolean {
     text
   )
 }
+
+/** Видимое окно конкретного приложения (нужно после открытия приложения, чтобы знать, куда вводить текст). */
+export async function findAppWindow(app: string): Promise<FocusedWindow | null> {
+  const raw = await runAgentDesktop(['list-windows'])
+  const parsed = JSON.parse(raw) as {
+    ok: boolean
+    data: { app_name: string; id: string; title: string; is_focused: boolean; visible: boolean }[]
+  }
+  if (!parsed.ok) return null
+  const wins = parsed.data.filter((w) => w.visible && w.app_name.toLowerCase() === app.toLowerCase())
+  const win = wins.find((w) => w.is_focused) ?? wins[0]
+  return win ? { app: win.app_name, windowId: win.id, title: win.title } : null
+}

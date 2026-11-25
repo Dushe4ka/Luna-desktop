@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { findEditable, MAX_TEXT_CHARS, pressInWindow, typeIntoRef } from '../context/input'
 import { isSensitive } from '../memory/policy'
+import { runAppleScript } from './applescript'
 
 /** Выполнение действий на компьютере через agent-desktop. Вызывается только после подтверждения. */
 export interface ActionContext {
@@ -25,6 +26,7 @@ export interface MemoryAccess {
 export function executeAction(name: string, args: Record<string, unknown>, ctx: ActionContext): Promise<string> {
   if (name === 'type_text') return typeText(String(args.text ?? ''), ctx)
   if (name === 'press_key') return pressKey(String(args.key ?? ''), ctx)
+  if (name === 'run_applescript') return runAppleScript(String(args.script ?? ''))
   if (name === 'create_task' || name === 'update_task' || name === 'list_tasks' || name === 'search_memory' || name === 'remember') {
     return Promise.resolve(memoryTool(name, args, ctx))
   }

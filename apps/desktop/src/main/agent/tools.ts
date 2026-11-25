@@ -6,6 +6,19 @@ import type { ToolSpec } from './types'
  */
 export const TOOLS: ToolSpec[] = [
   {
+    name: 'run_applescript',
+    description:
+      'Выполнить AppleScript, чтобы управлять приложениями macOS: создать заметку, событие календаря, напоминание и т.п. Пример заметки: tell application "Notes" to make new note with properties {name:"Привет", body:"привет"}. Используй, когда пользователь просит что-то создать или изменить в приложении.',
+    parameters: {
+      type: 'object',
+      properties: {
+        script: { type: 'string', description: 'Текст AppleScript целиком' }
+      },
+      required: ['script'],
+      additionalProperties: false
+    }
+  },
+  {
     name: 'create_task',
     description:
       'Создать карточку задачи, когда пользователь ставит цель, срок или обязательство. Карточка видна пользователю и её можно поправить.',
@@ -113,7 +126,8 @@ export const RISK: Record<string, Risk> = {
   open_app: 'act',
   type_text: 'act',
   press_key: 'send',
-  remember: 'act'
+  remember: 'act',
+  run_applescript: 'act'
 }
 
 /** Клавиши, которые Луна может нажать. Остальное не разрешено. */
@@ -130,6 +144,11 @@ export const READ_TOOLS = new Set(['list_tasks', 'search_memory'])
 export function describeAction(name: string, args: Record<string, unknown>, targetApp: string | null): string {
   if (name === 'open_app') return `Открыть приложение «${String(args.app ?? '')}»`
   if (name === 'remember') return `Запомнить: «${String(args.text ?? '')}»?`
+  if (name === 'run_applescript') {
+    const script = String(args.script ?? '')
+    const shown = script.length > 300 ? script.slice(0, 300) + '…' : script
+    return `Выполнить скрипт для приложений: «${shown.replace(/\s+/g, ' ')}»`
+  }
   if (name === 'press_key') {
     return `Нажать «${String(args.key ?? '')}» в «${targetApp ?? 'окне'}»${args.key === 'return' ? ' (может отправить сообщение)' : ''}`
   }
