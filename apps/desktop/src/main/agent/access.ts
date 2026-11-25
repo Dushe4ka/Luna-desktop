@@ -2,9 +2,9 @@ import { RISK } from './tools'
 
 /**
  * Уровни доступа (спека §6). Решаем, нужно ли спрашивать пользователя перед действием.
- * Правила, которые не отключаются ни одним уровнем:
- *  - действия класса «send» (нажатие Return, отправка) всегда с подтверждением;
- *  - снимок экрана и всё, что уходит в облако, решается отдельно (в main, не здесь).
+ * На уровне «полный доступ» Луна ничего не спрашивает: выполняет всё, в том числе отправку (класс «send»)
+ * и снимки окон. Это включается только с согласием пользователя и видно на значке.
+ * На остальных уровнях отправка и снимки всегда спрашивают.
  */
 export type AccessLevel = 'ask' | 'safe' | 'allowlist' | 'full'
 
@@ -23,13 +23,17 @@ export interface AccessInput {
 
 /** true — выполнить без вопроса, false — спросить. */
 export function autoApprove(input: AccessInput): boolean {
-  // Отправка от имени пользователя — всегда с подтверждением, кроме любого уровня.
+  // Полный доступ: без вопросов вообще.
+  if (input.level === 'full') return true
+  // Снимок окна уходит в облако — только на полном доступе без вопросов.
+  if (input.toolName === 'read_screenshot') return false
+  // Отправка от имени пользователя — с подтверждением на всех остальных уровнях.
   if (RISK[input.toolName] === 'send') return false
 
   if (input.toolName === 'remember') {
     // Явная просьба «запомни» — всегда без вопроса; на «безопасном» уровне и выше — тоже.
     if (input.explicitMemory) return true
-    return input.level === 'safe' || input.level === 'allowlist' || input.level === 'full'
+    return input.level !== 'ask'
   }
 
   switch (input.level) {
@@ -42,8 +46,6 @@ export function autoApprove(input: AccessInput): boolean {
       const app = String(input.args.app ?? input.targetApp ?? '')
       return input.allowlist.includes(`${input.toolName}:${app}`)
     }
-    case 'full':
-      return true
   }
 }
 

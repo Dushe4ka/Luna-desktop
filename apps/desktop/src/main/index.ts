@@ -216,12 +216,15 @@ async function submit(text: string): Promise<void> {
       journal({ kind: 'read', detail: read.app, chars: read.text.length })
     } else if (foreground && !isExcludedApp(foreground.app)) {
       // Текст не отдан: снимок окна уходит в облачную модель, поэтому сначала спрашиваем.
-      const allowed = await requestApproval({
-        id: randomUUID(),
-        name: 'read_screenshot',
-        args: {},
-        description: `Отправить снимок окна «${foreground.app}» в облачную модель`
-      })
+      const level = getSettings().accessLevel
+      const allowed =
+        level === 'full' ||
+        (await requestApproval({
+          id: randomUUID(),
+          name: 'read_screenshot',
+          args: {},
+          description: `Отправить снимок окна «${foreground.app}» в облачную модель`
+        }))
       const image = allowed ? await captureWindow(foreground.windowId) : null
       if (!allowed) {
         update({ screenNote: 'Снимок не отправлен: вы отказались.' })
