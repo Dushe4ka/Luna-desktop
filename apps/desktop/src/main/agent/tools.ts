@@ -6,6 +6,65 @@ import type { ToolSpec } from './types'
  */
 export const TOOLS: ToolSpec[] = [
   {
+    name: 'run_command',
+    description:
+      'Выполнить команду в командной строке (zsh) на компьютере пользователя. Используй для поиска, сборки, git, установки пакетов и других задач. Не используй для того, что проще сделать другим инструментом.',
+    parameters: {
+      type: 'object',
+      properties: {
+        command: { type: 'string', description: 'Команда целиком, например: ls -la ~/Documents' },
+        cwd: { type: 'string', description: 'Папка, откуда запустить (по умолчанию домашняя)' }
+      },
+      required: ['command'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'read_file',
+    description: 'Прочитать текстовый файл по пути (можно ~/...).',
+    parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'], additionalProperties: false }
+  },
+  {
+    name: 'write_file',
+    description: 'Записать текстовый файл целиком (создаёт или перезаписывает). Используй осторожно: это меняет данные.',
+    parameters: {
+      type: 'object',
+      properties: { path: { type: 'string' }, content: { type: 'string' } },
+      required: ['path', 'content'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'edit_file',
+    description: 'Заменить один фрагмент текста в файле. Фрагмент должен встречаться в файле ровно один раз.',
+    parameters: {
+      type: 'object',
+      properties: { path: { type: 'string' }, old_text: { type: 'string' }, new_text: { type: 'string' } },
+      required: ['path', 'old_text', 'new_text'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'list_dir',
+    description: 'Показать содержимое папки.',
+    parameters: { type: 'object', properties: { path: { type: 'string' } }, additionalProperties: false }
+  },
+  {
+    name: 'search_files',
+    description: 'Найти текст в файлах внутри папки.',
+    parameters: {
+      type: 'object',
+      properties: { pattern: { type: 'string' }, path: { type: 'string' } },
+      required: ['pattern'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: 'fetch_url',
+    description: 'Загрузить текст веб-страницы по адресу (только чтение).',
+    parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'], additionalProperties: false }
+  },
+  {
     name: 'run_applescript',
     description:
       'Выполнить AppleScript, чтобы управлять приложениями macOS: создать заметку, событие календаря, напоминание и т.п. Пример заметки: tell application "Notes" to make new note with properties {name:"Привет", body:"привет"}. Используй, когда пользователь просит что-то создать или изменить в приложении.',
@@ -121,8 +180,15 @@ export const TOOLS: ToolSpec[] = [
  * act — меняет что-то на компьютере; send — может отправить сообщение от имени пользователя.
  * Оба класса требуют подтверждения. В режиме «наблюдать» не передаются вовсе.
  */
-export type Risk = 'act' | 'send'
+export type Risk = 'read' | 'act' | 'send'
 export const RISK: Record<string, Risk> = {
+  run_command: 'act',
+  read_file: 'read',
+  list_dir: 'read',
+  search_files: 'read',
+  fetch_url: 'read',
+  write_file: 'act',
+  edit_file: 'act',
   open_app: 'act',
   type_text: 'act',
   press_key: 'send',
@@ -138,12 +204,21 @@ export const ACTION_TOOLS = new Set(Object.keys(RISK))
 
 /** Записи в задачи и чтение памяти: без подтверждения (обратимо и видно пользователю). */
 export const AUTO_TOOLS = new Set(['create_task', 'update_task'])
-export const READ_TOOLS = new Set(['list_tasks', 'search_memory'])
+export const READ_TOOLS = new Set(['list_tasks', 'search_memory', 'read_file', 'list_dir', 'search_files', 'fetch_url'])
+/** Чтение файлов и веб-страниц: без вопроса на уровнях «безопасные» и «по списку». */
+export const FILE_READ_TOOLS = new Set(['read_file', 'list_dir', 'search_files', 'fetch_url'])
 
 /** Понятное описание действия для карточки подтверждения. */
 export function describeAction(name: string, args: Record<string, unknown>, targetApp: string | null): string {
   if (name === 'open_app') return `Открыть приложение «${String(args.app ?? '')}»`
   if (name === 'remember') return `Запомнить: «${String(args.text ?? '')}»?`
+  if (name === 'run_command') return `Выполнить команду: «${String(args.command ?? '').slice(0, 200)}»`
+  if (name === 'write_file') return `Записать файл «${String(args.path ?? '')}»`
+  if (name === 'edit_file') return `Изменить файл «${String(args.path ?? '')}»`
+  if (name === 'read_file') return `Прочитать файл «${String(args.path ?? '')}»`
+  if (name === 'list_dir') return `Посмотреть папку «${String(args.path ?? '~')}»`
+  if (name === 'search_files') return `Искать «${String(args.pattern ?? '')}» в «${String(args.path ?? '~')}»`
+  if (name === 'fetch_url') return `Открыть страницу «${String(args.url ?? '')}»`
   if (name === 'run_applescript') {
     const script = String(args.script ?? '')
     const shown = script.length > 300 ? script.slice(0, 300) + '…' : script

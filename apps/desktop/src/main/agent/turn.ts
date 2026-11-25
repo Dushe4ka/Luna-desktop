@@ -1,4 +1,5 @@
 import { ACTION_TOOLS, ALLOWED_KEYS, describeAction, isSafeAppName } from './tools'
+import { assessRisk } from './risk'
 import { systemPrompt } from './roles'
 import type { ChatMessage, ModelProvider, RoleId, ToolCall, ToolSpec } from './types'
 
@@ -116,7 +117,10 @@ async function handleCall(
     return 'Текст пустой.'
   }
   if (!ACTION_TOOLS.has(call.name)) return runTool(call.name, args)
-  const description = describeAction(call.name, args, targetApp)
+  const risk = assessRisk(call.name, args)
+  const description = risk.dangerous
+    ? `⚠ Опасно (${risk.reason}): ${describeAction(call.name, args, targetApp)}`
+    : describeAction(call.name, args, targetApp)
   // Уровень доступа решает, нужен ли вопрос. Отправка всегда спрашивает (см. access.ts).
   if (canAutoApprove(call.name, args)) {
     onEvent('tool_auto', description)

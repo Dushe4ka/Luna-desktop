@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { findEditable, MAX_TEXT_CHARS, pressInWindow, typeIntoRef } from '../context/input'
 import { isSensitive } from '../memory/policy'
 import { runAppleScript } from './applescript'
+import { editFileTool, fetchUrlTool, listDirTool, readFileTool, runCommandTool, searchFilesTool, writeFileTool } from './system-tools'
 
 /** Выполнение действий на компьютере через agent-desktop. Вызывается только после подтверждения. */
 export interface ActionContext {
@@ -27,6 +28,13 @@ export function executeAction(name: string, args: Record<string, unknown>, ctx: 
   if (name === 'type_text') return typeText(String(args.text ?? ''), ctx)
   if (name === 'press_key') return pressKey(String(args.key ?? ''), ctx)
   if (name === 'run_applescript') return runAppleScript(String(args.script ?? ''))
+  if (name === 'run_command') return runCommandTool(String(args.command ?? ''), args.cwd ? String(args.cwd) : undefined).then((r) => r.text)
+  if (name === 'read_file') return Promise.resolve(readFileTool(String(args.path ?? '')))
+  if (name === 'write_file') return Promise.resolve(writeFileTool(String(args.path ?? ''), String(args.content ?? '')))
+  if (name === 'edit_file') return Promise.resolve(editFileTool(String(args.path ?? ''), String(args.old_text ?? ''), String(args.new_text ?? '')))
+  if (name === 'list_dir') return Promise.resolve(listDirTool(String(args.path ?? '')))
+  if (name === 'search_files') return searchFilesTool(String(args.pattern ?? ''), String(args.path ?? ''))
+  if (name === 'fetch_url') return fetchUrlTool(String(args.url ?? ''))
   if (name === 'create_task' || name === 'update_task' || name === 'list_tasks' || name === 'search_memory' || name === 'remember') {
     return Promise.resolve(memoryTool(name, args, ctx))
   }

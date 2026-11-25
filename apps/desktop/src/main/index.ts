@@ -42,6 +42,7 @@ import {
   type FocusedWindow
 } from './context/screen'
 import { journal } from './journal'
+import { assessRisk } from './agent/risk'
 import { MemoryStore } from './memory/store'
 import { buildMemoryContext, isExplicitMemoryRequest } from './memory/policy'
 import { writeVault } from './memory/vault'
@@ -176,8 +177,9 @@ async function runTool(name: string, args: Record<string, unknown>): Promise<str
     memory: memoryAccess(),
     explicitMemory: explicitThisTurn
   })
-  const failed = result.startsWith('Не удалось') || result.startsWith('Скрипт не выполнен')
-  journal({ kind: failed ? 'action_failed' : 'action_done', detail: result })
+  const failed = result.startsWith('Не удалось') || result.startsWith('Скрипт не выполнен') || result.startsWith('Не удалось запустить')
+  // В журнал — только описание действия, без содержимого файлов и вывода команд.
+  journal({ kind: failed ? 'action_failed' : 'action_done', detail: describeForJournal(name, args, result) })
   // После открытия приложения его окно становится целью для следующего ввода текста.
   if (name === 'open_app' && !failed) {
     const app = String(args.app ?? '')
@@ -185,6 +187,15 @@ async function runTool(name: string, args: Record<string, unknown>): Promise<str
     if (win) foreground = win
   }
   return result
+}
+
+/** Короткая запись для журнала: что сделано, без содержимого. */
+function describeForJournal(name: string, args: Record<string, unknown>, result: string): string {
+  if (name === 'run_command') return `$ ${String(args.command ?? '').slice(0, 200)} → ${result.includes('код 0') ? 'код 0' : 'см. вывод'}`
+  if (name === 'write_file' || name === 'edit_file' || name === 'read_file' || name === 'list_dir') return `${name}: ${String(args.path ?? '')}`
+  if (name === 'search_files') return `search_files: ${String(args.pattern ?? '')}`
+  if (name === 'fetch_url') return `fetch_url: ${String(args.url ?? '')}`
+  return result.slice(0, 200)
 }
 
 /** Ждём, пока открытое приложение покажет окно (до 6 секунд). */
@@ -291,7 +302,8 @@ async function submit(text: string): Promise<void> {
           toolName: name,
           args,
           targetApp: foreground?.app ?? null,
-          explicitMemory: explicitThisTurn
+          explicitMemory: explicitThisTurn,
+          dangerous: assessRisk(name, args).dangerous
         })
       },
       signal: controller.signal,

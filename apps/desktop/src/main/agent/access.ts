@@ -2,9 +2,12 @@ import { RISK } from './tools'
 
 /**
  * Уровни доступа (спека §6). Решаем, нужно ли спрашивать пользователя перед действием.
- * На уровне «полный доступ» Луна ничего не спрашивает: выполняет всё, в том числе отправку (класс «send»)
- * и снимки окон. Это включается только с согласием пользователя и видно на значке.
- * На остальных уровнях отправка и снимки всегда спрашивают.
+ *  - «Опасное» (команды, которые вредят устройству и данным, защищённые пути) спрашивает ВСЕГДА,
+ *    даже на полном доступе: решает risk.ts, сюда приходит флагом.
+ *  - «Полный доступ»: остальное выполняется без вопросов (включая отправку и снимки окон).
+ *  - «Безопасные»: чтение и заметки без вопросов; запись, команды и открытие приложений — с вопросом.
+ *  - «По списку»: без вопросов только то, что в списке.
+ *  - «Спрашивать всегда»: всё спрашивает.
  */
 export type AccessLevel = 'ask' | 'safe' | 'allowlist' | 'full'
 
@@ -12,39 +15,45 @@ export const ACCESS_LEVELS: AccessLevel[] = ['ask', 'safe', 'allowlist', 'full']
 
 export interface AccessInput {
   level: AccessLevel
-  /** Записи вида "open_app:Calculator" или "type_text:Notes". */
+  /** Записи вида "open_app:Calculator" или "run_command:git status". */
   allowlist: string[]
   toolName: string
   args: Record<string, unknown>
   targetApp: string | null
   /** Память: «запомни» сказано прямо в этом запросе. */
   explicitMemory: boolean
+  /** Опасно по risk.ts (команда, защищённый путь, опасный скрипт). */
+  dangerous: boolean
 }
 
 /** true — выполнить без вопроса, false — спросить. */
 export function autoApprove(input: AccessInput): boolean {
+  // Опасное спрашиваем всегда, на любом уровне.
+  if (input.dangerous) return false
   // Полный доступ: без вопросов вообще.
   if (input.level === 'full') return true
-  // Снимок окна уходит в облако — только на полном доступе без вопросов.
+  // Снимок окна уходит в облако — на остальных уровнях спрашиваем.
   if (input.toolName === 'read_screenshot') return false
-  // Отправка от имени пользователя — с подтверждением на всех остальных уровнях.
-  if (RISK[input.toolName] === 'send') return false
 
   if (input.toolName === 'remember') {
-    // Явная просьба «запомни» — всегда без вопроса; на «безопасном» уровне и выше — тоже.
     if (input.explicitMemory) return true
     return input.level !== 'ask'
+  }
+
+  const cls = RISK[input.toolName]
+  if (cls === 'read') {
+    return input.level === 'safe'
   }
 
   switch (input.level) {
     case 'ask':
       return false
     case 'safe':
-      // Чтение и заметки без вопросов, действия на компьютере — с вопросом.
       return false
     case 'allowlist': {
       const app = String(input.args.app ?? input.targetApp ?? '')
-      return input.allowlist.includes(`${input.toolName}:${app}`)
+      const command = String(input.args.command ?? '')
+      return input.allowlist.includes(`${input.toolName}:${app}`) || (command !== '' && input.allowlist.includes(`${input.toolName}:${command}`))
     }
   }
 }
