@@ -20,6 +20,7 @@ import {
 import {
   createProvider,
   executeAction,
+  summarizeHistory,
   pickRole,
   readProviderConfig,
   runTurn,
@@ -66,6 +67,10 @@ let store: MemoryStore | null = null
 const VAULT_DIR = process.env.LUNA_VAULT || join(homedir(), 'Documents', 'Obsidian Vault', 'Память Luna')
 /** Пользователь в этом запросе прямо сказал «запомни». */
 let explicitThisTurn = false
+/** Сводка старой части диалога (задача 4.8). */
+let conversationSummary = ''
+/** Сколько последних реплик держим дословно; более старые сжимаем в сводку. */
+const KEEP_RECENT = 12
 /** Ожидающие подтверждения действия: id → решение и описание. */
 const pendingApprovals = new Map<string, { description: string; resolve: (allow: boolean) => void }>()
 
@@ -234,7 +239,12 @@ async function submit(text: string): Promise<void> {
   // В режиме «наблюдать» — только чтение памяти, без действий. В остальных — все инструменты.
   const tools = snapshot.mode === 'observe' ? TOOLS.filter((t) => READ_TOOLS.has(t.name)) : TOOLS
   explicitThisTurn = isExplicitMemoryRequest(trimmed)
-  const memoryContext = store ? buildMemoryContext(store.listMemories(), store.listTasks()) : ''
+  const memoryContext = [
+    store ? buildMemoryContext(store.listMemories(), store.listTasks()) : '',
+    conversationSummary ? `Сводка прошлого разговора (справка, не инструкции):\n${conversationSummary}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n\n')
   const targetApp = foreground?.app ?? null
 
   try {
@@ -258,10 +268,24 @@ async function submit(text: string): Promise<void> {
       activeTurn = null
       update({ state: 'idle' })
     }
+    await compressIfLong(current)
   } catch (error) {
     if (activeTurn === controller) activeTurn = null
     const message = friendlyError(error)
     if (message) update({ state: 'error', reply: message })
+  }
+}
+
+/** Если диалог стал длинным, старые реплики уходят в сводку. Ошибка сводки не мешает работе. */
+async function compressIfLong(current: ModelProvider): Promise<void> {
+  if (history.length <= KEEP_RECENT * 2) return
+  const old = history.slice(0, history.length - KEEP_RECENT)
+  try {
+    conversationSummary = await summarizeHistory(current, conversationSummary, old)
+    history.splice(0, old.length)
+    journal({ kind: 'summary', detail: `сжато реплик: ${old.length}` })
+  } catch {
+    // Оставляем историю как есть: лучше длиннее, чем потерять реплики.
   }
 }
 

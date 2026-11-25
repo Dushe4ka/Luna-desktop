@@ -18,6 +18,7 @@ export type JournalKind =
   | 'action_done'
   | 'action_failed'
   | 'stop'
+  | 'summary'
 
 export interface JournalEntry {
   kind: JournalKind
