@@ -38,6 +38,12 @@ import {
   type FocusedWindow
 } from './context/screen'
 import { journal } from './journal'
+import { MemoryStore } from './memory/store'
+import { buildMemoryContext, isExplicitMemoryRequest } from './memory/policy'
+import { writeVault } from './memory/vault'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { READ_TOOLS } from './agent'
 
 /** Горячая клавиша открытия ввода. В Electron это Option+Space на macOS. */
 const HOTKEY = 'Alt+Space'
@@ -54,6 +60,12 @@ const history: ChatMessage[] = []
 let provider: ModelProvider | null = null
 let providerError: string | null = null
 let activeTurn: AbortController | null = null
+/** Память: SQLite в папке данных приложения. Открывается при запуске. */
+let store: MemoryStore | null = null
+/** Зеркало в Obsidian: папка «Память Luna» основного vault (решение автора). */
+const VAULT_DIR = process.env.LUNA_VAULT || join(homedir(), 'Documents', 'Obsidian Vault', 'Память Luna')
+/** Пользователь в этом запросе прямо сказал «запомни». */
+let explicitThisTurn = false
 /** Ожидающие подтверждения действия: id → решение и описание. */
 const pendingApprovals = new Map<string, { description: string; resolve: (allow: boolean) => void }>()
 
@@ -74,6 +86,32 @@ function setState(state: OrbState): void {
 }
 
 /** Провайдер создаём один раз. Ключ OpenAI: переменная окружения, иначе Keychain. */
+/** Обновляет Obsidian-зеркало. Если папки нет или недоступна — пишем предупреждение, память всё равно работает. */
+function syncVault(): void {
+  if (!store) return
+  try {
+    writeVault(VAULT_DIR, store.listTasks(500), store.listMemories(500))
+  } catch (error) {
+    console.warn('Obsidian-зеркало не обновлено:', error instanceof Error ? error.message : error)
+  }
+}
+
+/** Доступ агента к памяти: все изменения сразу попадают в зеркало. */
+function memoryAccess() {
+  if (!store) throw new Error('Память не открыта')
+  const db = store
+  return {
+    createTask: (title: string, due: string | null) => db.createTask(title, due),
+    updateTaskStatus: (id: string, status: 'active' | 'waiting' | 'done' | 'postponed', summary?: string) =>
+      db.updateTaskStatus(id, status, summary),
+    listTasks: (limit?: number) => db.listTasks(limit),
+    search: (query: string) => db.search(query),
+    addMemory: (layer: 'profile' | 'pattern' | 'fact', content: string, source: 'explicit' | 'proposed') =>
+      db.addMemory(layer, content, source),
+    onChanged: () => syncVault()
+  }
+}
+
 async function getProvider(): Promise<ModelProvider | null> {
   if (provider || providerError) return provider
   const config = readProviderConfig(process.env)
@@ -122,7 +160,9 @@ function decideApproval(id: string, allow: boolean): void {
 /** Выполняет подтверждённое действие и пишет результат в журнал. */
 async function runTool(name: string, args: Record<string, unknown>): Promise<string> {
   const result = await executeAction(name, args, {
-    foreground: foreground ? { app: foreground.app, windowId: foreground.windowId } : null
+    foreground: foreground ? { app: foreground.app, windowId: foreground.windowId } : null,
+    memory: memoryAccess(),
+    explicitMemory: explicitThisTurn
   })
   const failed = result.startsWith('Не удалось')
   journal({ kind: failed ? 'action_failed' : 'action_done', detail: result })
@@ -191,8 +231,10 @@ async function submit(text: string): Promise<void> {
     }
   }
 
-  // В режиме «наблюдать» действий нет вовсе.
-  const tools = snapshot.mode === 'observe' ? [] : TOOLS
+  // В режиме «наблюдать» — только чтение памяти, без действий. В остальных — все инструменты.
+  const tools = snapshot.mode === 'observe' ? TOOLS.filter((t) => READ_TOOLS.has(t.name)) : TOOLS
+  explicitThisTurn = isExplicitMemoryRequest(trimmed)
+  const memoryContext = store ? buildMemoryContext(store.listMemories(), store.listTasks()) : ''
   const targetApp = foreground?.app ?? null
 
   try {
@@ -204,6 +246,8 @@ async function submit(text: string): Promise<void> {
       tools,
       targetApp,
       images,
+      memoryContext,
+      explicitMemory: explicitThisTurn,
       signal: controller.signal,
       onDelta: (fullText) => update({ reply: fullText, state: 'acting' }),
       requestApproval,
@@ -235,7 +279,7 @@ function stopTurn(): void {
 }
 
 /** Запоминаем активное окно до того, как панель заберёт фокус. */
-async function openPanelFor(view: 'menu' | 'input'): Promise<void> {
+async function openPanelFor(view: 'menu' | 'input' | 'memory'): Promise<void> {
   if (!isPanelVisible()) {
     foreground = await findFocusedWindow().catch(() => null)
   }
@@ -264,8 +308,10 @@ function runAction(id: MenuActionId): void {
       hidePanel()
       return
     case 'history':
+      void openPanelFor('memory')
+      return
     case 'settings':
-      update({ reply: id === 'history' ? 'История появится в фазе 4.' : 'Настройки появятся позже.' })
+      update({ reply: 'Настройки появятся позже.' })
       void openPanelFor('input')
       return
     case 'quit':
@@ -285,6 +331,16 @@ function toggleInput(): void {
 function registerIpc(): void {
   ipcMain.handle(IPC.snapshot, () => snapshot)
   ipcMain.on(IPC.openPanel, (_event, view: 'menu' | 'input') => void openPanelFor(view))
+  ipcMain.handle(IPC.memoryList, () => {
+    const db = store
+    return db ? { tasks: db.listTasks(200), memories: db.listMemories(200) } : { tasks: [], memories: [] }
+  })
+  ipcMain.on(IPC.memoryDelete, (_event, kind: 'task' | 'memory', id: string) => {
+    if (!store) return
+    if (kind === 'task') store.deleteTask(String(id))
+    else store.deleteMemory(Number(id))
+    syncVault()
+  })
   ipcMain.on(IPC.hidePanel, () => hidePanel())
   ipcMain.on(IPC.action, (_event, id: MenuActionId) => runAction(id))
   ipcMain.on(IPC.submit, (_event, text: string) => void submit(text))
@@ -300,6 +356,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  store = new MemoryStore(join(app.getPath('userData'), 'memory.sqlite'))
   registerIpc()
   createOrbWindow()
   createPanelWindow()

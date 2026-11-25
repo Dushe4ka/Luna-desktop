@@ -5,13 +5,36 @@
 export type OrbState = 'idle' | 'listening' | 'thinking' | 'acting' | 'approval' | 'error' | 'paused'
 
 /** Что показывает панель, которая открывается от значка. */
-export type PanelView = 'menu' | 'input'
+export type PanelView = 'menu' | 'input' | 'memory'
 
 /** Режимы доступа из спеки (§6). В фазе 1 это только переключатель отображения. */
 export type AssistantMode = 'observe' | 'assist' | 'autopilot'
 
 /** Действия из стеклянного меню. */
 export type MenuActionId = 'history' | 'text' | 'listen' | 'mode' | 'settings' | 'pause' | 'quit'
+
+/** Задача и запись памяти для экрана «Память и задачи». */
+export interface TaskItem {
+  id: string
+  title: string
+  status: 'active' | 'waiting' | 'done' | 'postponed'
+  due: string | null
+  summary: string
+  updatedAt: string
+}
+
+export interface MemoryItem {
+  id: number
+  layer: 'profile' | 'pattern' | 'fact'
+  content: string
+  source: 'explicit' | 'proposed'
+  createdAt: string
+}
+
+export interface MemorySnapshot {
+  tasks: TaskItem[]
+  memories: MemoryItem[]
+}
 
 export interface LunaSnapshot {
   state: OrbState
@@ -34,7 +57,9 @@ export const IPC = {
   submit: 'luna:submit',
   dragBy: 'luna:drag-by',
   stop: 'luna:stop',
-  decide: 'luna:decide'
+  decide: 'luna:decide',
+  memoryList: 'luna:memory-list',
+  memoryDelete: 'luna:memory-delete'
 } as const
 
 /** API, который мост открывает интерфейсу через window.luna. */
@@ -49,4 +74,6 @@ export interface LunaAPI {
   dragBy(dx: number, dy: number): void
   stop(): void
   decide(id: string, allow: boolean): void
+  listMemory(): Promise<MemorySnapshot>
+  deleteMemory(kind: 'task' | 'memory', id: string): void
 }

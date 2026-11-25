@@ -25,6 +25,10 @@ export interface TurnOptions {
   targetApp: string | null
   /** Снимок окна, если текст прочитать не удалось. Только для этого запроса. */
   images?: string[]
+  /** Справка о памяти для системного промпта (не инструкции). */
+  memoryContext?: string
+  /** Пользователь прямо попросил «запомни»: сохранение памяти без подтверждения. */
+  explicitMemory: boolean
   onDelta: (fullTextSoFar: string) => void
   /** Спрашивает пользователя перед действием. true — разрешил. */
   requestApproval: (request: ApprovalRequest) => Promise<boolean>
@@ -40,10 +44,10 @@ export interface TurnOptions {
  * Возвращает итоговый текст ответа.
  */
 export async function runTurn(options: TurnOptions): Promise<string> {
-  const { provider, role, history, userText, tools, targetApp, images, onDelta, requestApproval, runTool, onEvent, signal } = options
+  const { provider, role, history, userText, tools, targetApp, images, memoryContext, explicitMemory, onDelta, requestApproval, runTool, onEvent, signal } = options
   history.push({ role: 'user', content: userText })
   const messages: ChatMessage[] = [
-    { role: 'system', content: systemPrompt(role) },
+    { role: 'system', content: memoryContext ? `${systemPrompt(role)}\n\n${memoryContext}` : systemPrompt(role) },
     ...history.slice(-HISTORY_LIMIT)
   ]
   // Картинка прикрепляется только к текущему вопросу; в историю она не попадает.
@@ -68,7 +72,7 @@ export async function runTurn(options: TurnOptions): Promise<string> {
 
       messages.push({ role: 'assistant', content: text, toolCalls: calls })
       for (const call of calls) {
-        const result = await handleCall(call, known, targetApp, requestApproval, runTool, onEvent)
+        const result = await handleCall(call, known, targetApp, explicitMemory, requestApproval, runTool, onEvent)
         messages.push({ role: 'tool', content: result, toolCallId: call.id })
       }
     }
@@ -84,6 +88,7 @@ async function handleCall(
   call: { id: string; name: string; arguments: string },
   known: Set<string>,
   targetApp: string | null,
+  explicitMemory: boolean,
   requestApproval: TurnOptions['requestApproval'],
   runTool: TurnOptions['runTool'],
   onEvent: TurnOptions['onEvent']
@@ -111,6 +116,8 @@ async function handleCall(
     return 'Текст пустой.'
   }
   if (!ACTION_TOOLS.has(call.name)) return runTool(call.name, args)
+  // Явная просьба «запомни» — сохраняем без подтверждения. Без неё — карточка подтверждения.
+  if (call.name === 'remember' && explicitMemory) return runTool(call.name, args)
 
   const description = describeAction(call.name, args, targetApp)
   onEvent('tool_proposed', description)

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import type { LunaSnapshot, MenuActionId, PanelView as View } from '../../../shared/luna'
+import type { LunaSnapshot, MemorySnapshot, MenuActionId, PanelView as View } from '../../../shared/luna'
 
 const MENU_ITEMS: { id: MenuActionId; label: string; hint?: string; danger?: boolean }[] = [
-  { id: 'history', label: 'История сообщений', hint: '⌘H' },
+  { id: 'history', label: 'Память и задачи', hint: '⌘H' },
   { id: 'text', label: 'Написать текстом', hint: '⌘T' },
   { id: 'listen', label: 'Слушать', hint: '⌥Space' },
   { id: 'mode', label: 'Режим' },
@@ -43,9 +43,9 @@ export default function PanelView() {
 
   return (
     <div className="panel">
-      {view === 'menu' ? (
-        <GlassMenu mode={snapshot?.mode ?? 'assist'} />
-      ) : (
+      {view === 'menu' && <GlassMenu mode={snapshot?.mode ?? 'assist'} />}
+      {view === 'memory' && <MemoryView />}
+      {view === 'input' && (
         <InputPanel
           reply={snapshot?.reply ?? null}
           state={snapshot?.state ?? 'idle'}
@@ -157,6 +157,66 @@ function InputPanel({
         <button className="send" onClick={send} disabled={!text.trim()} aria-label="Отправить">
           ↵
         </button>
+      </div>
+    </div>
+  )
+}
+
+/** Экран «Память и задачи»: задачи со статусами и записи памяти, с удалением. */
+function MemoryView() {
+  const [data, setData] = useState<MemorySnapshot>({ tasks: [], memories: [] })
+
+  const load = (): void => {
+    void window.luna.listMemory().then(setData)
+  }
+  useEffect(load, [])
+
+  const remove = (kind: 'task' | 'memory', id: string | number): void => {
+    window.luna.deleteMemory(kind, String(id))
+    setTimeout(load, 120)
+  }
+
+  return (
+    <div className="menu memory" role="region" aria-label="Память и задачи">
+      <div className="menu-head">
+        <span>Задачи</span>
+      </div>
+      <div className="memory-list">
+        {data.tasks.length === 0 && <div className="muted">Задач пока нет.</div>}
+        {data.tasks.map((t) => (
+          <div className="memory-row" key={t.id}>
+            <div className="memory-main">
+              <div>{t.title}</div>
+              <div className="memory-meta">
+                {t.status}
+                {t.due ? `, срок ${t.due}` : ''}
+                {t.summary ? ` · ${t.summary}` : ''}
+              </div>
+            </div>
+            <button className="forget" onClick={() => remove('task', t.id)} aria-label={`Удалить задачу ${t.title}`}>
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <div className="menu-head">
+        <span>Память</span>
+      </div>
+      <div className="memory-list">
+        {data.memories.length === 0 && <div className="muted">Пока пусто.</div>}
+        {data.memories.map((m) => (
+          <div className="memory-row" key={m.id}>
+            <div className="memory-main">
+              <div>{m.content}</div>
+              <div className="memory-meta">
+                {m.layer} · {m.source === 'explicit' ? 'вы попросили' : 'предложено'}
+              </div>
+            </div>
+            <button className="forget" onClick={() => remove('memory', m.id)} aria-label={`Забыть: ${m.content}`}>
+              ×
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   )
