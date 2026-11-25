@@ -24,6 +24,7 @@ import {
   type ChatMessage,
   type ModelProvider
 } from './agent'
+import { readSecret } from './secrets'
 
 /** Горячая клавиша открытия ввода. В Electron это Option+Space на macOS. */
 const HOTKEY = 'Alt+Space'
@@ -55,14 +56,19 @@ function setState(state: OrbState): void {
   update({ state })
 }
 
-/** Провайдер создаём один раз; ошибка настройки показывается пользователю, а не падает приложение. */
-function getProvider(): ModelProvider | null {
+/** Провайдер создаём один раз. Ключ OpenAI: переменная окружения, иначе Keychain. */
+async function getProvider(): Promise<ModelProvider | null> {
   if (provider || providerError) return provider
-  try {
-    provider = createProvider(readProviderConfig(process.env))
-  } catch (error) {
-    providerError = error instanceof Error ? error.message : String(error)
+  const config = readProviderConfig(process.env)
+  if (config.provider === 'openai' && !config.apiKey) {
+    config.apiKey = (await readSecret('openai')) ?? ''
   }
+  if (config.provider === 'openai' && !config.apiKey) {
+    providerError =
+      'Ключ OpenAI не найден. Сохраните его в Keychain: security add-generic-password -s luna-desktop -a openai -w ВАШ_КЛЮЧ'
+    return null
+  }
+  provider = createProvider(config)
   return provider
 }
 
@@ -87,7 +93,7 @@ async function submit(text: string): Promise<void> {
   const controller = new AbortController()
   activeTurn = controller
 
-  const current = getProvider()
+  const current = await getProvider()
   if (!current) {
     update({ state: 'error', reply: providerError ?? 'Модель не настроена.' })
     return

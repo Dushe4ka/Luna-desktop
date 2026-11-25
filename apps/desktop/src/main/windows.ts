@@ -3,7 +3,11 @@ import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
 import type { PanelView } from '../shared/luna'
 
-export const ORB_SIZE = 96
+/** Видимый размер значка. */
+export const ORB_VISUAL = 64
+/** Окно значка больше значка: внутри помещаются кольца и свечение, иначе их обрежет. */
+export const ORB_WINDOW = 128
+const ORB_INSET = (ORB_WINDOW - ORB_VISUAL) / 2
 export const PANEL_WIDTH = 320
 export const PANEL_HEIGHT = 380
 const EDGE_OFFSET = 28
@@ -51,11 +55,13 @@ function makeOverlayWindow(width: number, height: number): BrowserWindow {
   return win
 }
 
-/** Значок в правом верхнем углу основного экрана. */
+/** Значок в правом верхнем углу основного экрана. Видимый круг стоит у края с отступом. */
 export function createOrbWindow(): BrowserWindow {
   const area = screen.getPrimaryDisplay().workArea
-  orbWindow = makeOverlayWindow(ORB_SIZE, ORB_SIZE)
-  orbWindow.setPosition(area.x + area.width - ORB_SIZE - EDGE_OFFSET, area.y + EDGE_OFFSET)
+  orbWindow = makeOverlayWindow(ORB_WINDOW, ORB_WINDOW)
+  const x = area.x + area.width - ORB_VISUAL - EDGE_OFFSET - ORB_INSET
+  const y = area.y + EDGE_OFFSET - ORB_INSET
+  orbWindow.setPosition(Math.round(x), Math.round(y))
   loadView(orbWindow, 'orb')
   orbWindow.once('ready-to-show', () => orbWindow?.showInactive())
   orbWindow.on('closed', () => (orbWindow = null))
@@ -71,15 +77,19 @@ export function createPanelWindow(): BrowserWindow {
   return panelWindow
 }
 
-/** Ставит панель под значком, выровненной по его правому краю. */
+/** Ставит панель под видимым значком, выровненной по его правому краю. */
 function placePanel(): void {
   if (!orbWindow || !panelWindow) return
-  const orb = orbWindow.getBounds()
-  const area = screen.getDisplayMatching(orb).workArea
-  let x = orb.x + ORB_SIZE - PANEL_WIDTH
-  let y = orb.y + ORB_SIZE + GAP
+  const win = orbWindow.getBounds()
+  const visualLeft = win.x + ORB_INSET
+  const visualTop = win.y + ORB_INSET
+  const visualRight = visualLeft + ORB_VISUAL
+  const visualBottom = visualTop + ORB_VISUAL
+  const area = screen.getDisplayMatching(win).workArea
+  let x = visualRight - PANEL_WIDTH
+  let y = visualBottom + GAP
   x = Math.max(area.x, Math.min(x, area.x + area.width - PANEL_WIDTH))
-  if (y + PANEL_HEIGHT > area.y + area.height) y = orb.y - GAP - PANEL_HEIGHT
+  if (y + PANEL_HEIGHT > area.y + area.height) y = visualTop - GAP - PANEL_HEIGHT
   panelWindow.setPosition(Math.round(x), Math.round(y))
 }
 

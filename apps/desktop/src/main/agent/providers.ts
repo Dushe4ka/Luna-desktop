@@ -37,7 +37,7 @@ export interface ProviderConfig {
 }
 
 export function readProviderConfig(env: NodeJS.ProcessEnv): ProviderConfig {
-  const provider = env.LUNA_PROVIDER === 'openai' ? 'openai' : 'ollama'
+  const provider = env.LUNA_PROVIDER === 'ollama' ? 'ollama' : 'openai'
   if (provider === 'openai') {
     return {
       provider,

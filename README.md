@@ -6,6 +6,14 @@
 
 Запуск: `cd apps/desktop && npm install && npm run dev`.
 
+Модель по умолчанию — OpenAI (`gpt-4.1-mini`). Ключ сохраняется в Keychain один раз:
+
+```
+security add-generic-password -s luna-desktop -a openai -w ВАШ_КЛЮЧ -U
+```
+
+Локальная модель через Ollama включается переменной `LUNA_PROVIDER=ollama`.
+
 ## Документация
 
 - [Спецификация](docs/SPEC.md) — что делаем и почему.
