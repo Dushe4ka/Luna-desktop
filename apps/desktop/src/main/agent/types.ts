@@ -17,6 +17,8 @@ export interface ChatMessage {
   toolCalls?: ToolCall[]
   /** Только для tool: к какому вызову относится результат. */
   toolCallId?: string
+  /** Картинки в виде data URL (снимок окна). Живут только в текущем запросе, в историю не пишутся. */
+  images?: string[]
 }
 
 /** Описание инструмента для модели (JSON Schema для аргументов). */

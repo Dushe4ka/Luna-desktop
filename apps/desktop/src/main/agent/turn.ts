@@ -23,6 +23,8 @@ export interface TurnOptions {
   tools: ToolSpec[]
   /** Приложение, в котором будет действие (для описания в подтверждении). */
   targetApp: string | null
+  /** Снимок окна, если текст прочитать не удалось. Только для этого запроса. */
+  images?: string[]
   onDelta: (fullTextSoFar: string) => void
   /** Спрашивает пользователя перед действием. true — разрешил. */
   requestApproval: (request: ApprovalRequest) => Promise<boolean>
@@ -38,12 +40,14 @@ export interface TurnOptions {
  * Возвращает итоговый текст ответа.
  */
 export async function runTurn(options: TurnOptions): Promise<string> {
-  const { provider, role, history, userText, tools, targetApp, onDelta, requestApproval, runTool, onEvent, signal } = options
+  const { provider, role, history, userText, tools, targetApp, images, onDelta, requestApproval, runTool, onEvent, signal } = options
   history.push({ role: 'user', content: userText })
   const messages: ChatMessage[] = [
     { role: 'system', content: systemPrompt(role) },
     ...history.slice(-HISTORY_LIMIT)
   ]
+  // Картинка прикрепляется только к текущему вопросу; в историю она не попадает.
+  if (images?.length) messages[messages.length - 1] = { ...messages[messages.length - 1], images }
   const known = new Set(tools.map((t) => t.name))
 
   try {

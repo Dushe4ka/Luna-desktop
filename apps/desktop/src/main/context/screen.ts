@@ -1,4 +1,8 @@
 import { execFile } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { readFileSync, unlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 /**
  * Чтение окна через agent-desktop (accessibility). Ничего не пишет и не нажимает.
@@ -12,6 +16,8 @@ export const EXCLUDED_APPS = ['1Password', 'Bitwarden', 'Keychain Access', 'Св
 const OWN_APPS = ['Electron', 'Luna', 'Luna Desktop']
 
 const MAX_CHARS = 3000
+/** Меньше этого — считаем, что содержимого окна нет (только заголовок или пустота). */
+const MIN_CONTENT_CHARS = 40
 const TIMEOUT_MS = 15000
 
 export interface FocusedWindow {
@@ -87,10 +93,46 @@ export async function readFocusedWindow(target: FocusedWindow): Promise<ScreenRe
   collectText(parsed.data.tree, parts, new Set())
   let text = parts.join('\n')
   if (text.length > MAX_CHARS) text = text.slice(0, MAX_CHARS) + '\n…(обрезано)'
-  if (!text.trim()) {
-    return { ok: false, app: target.app, reason: 'В окне не найдено текста.' }
+  // Только заголовок окна (например, «Telegram @ имя») — это не содержимое, считаем текст не прочитанным.
+  if (text.trim().length < MIN_CONTENT_CHARS) {
+    return { ok: false, app: target.app, reason: 'Окно отдаёт только заголовок, без содержимого.' }
   }
   return { ok: true, app: target.app, title: target.title, text }
+}
+
+/** Приложение из списка исключений (его не читаем и не снимаем). */
+export function isExcludedApp(app: string): boolean {
+  return EXCLUDED_APPS.some((name) => app.includes(name))
+}
+
+/**
+ * Снимок окна как запасной путь (для приложений, которые не отдают текст).
+ * Уменьшаем до 1400 px, временный файл удаляем сразу. Возвращает data URL или null.
+ */
+export function captureWindow(windowId: string): Promise<string | null> {
+  const file = join(tmpdir(), `luna-shot-${randomUUID()}.png`)
+  const small = file.replace(/\.png$/, '-small.png')
+  return new Promise((resolve) => {
+    execFile('agent-desktop', ['screenshot', file, '--window-id', windowId], { timeout: TIMEOUT_MS }, (error) => {
+      if (error) return resolve(null)
+      execFile('sips', ['-Z', '1400', file, '--out', small], { timeout: TIMEOUT_MS }, (sipsError) => {
+        try {
+          const data = readFileSync(sipsError ? file : small).toString('base64')
+          resolve(`data:image/png;base64,${data}`)
+        } catch {
+          resolve(null)
+        } finally {
+          for (const path of [file, small]) {
+            try {
+              unlinkSync(path)
+            } catch {
+              // уже удалён
+            }
+          }
+        }
+      })
+    })
+  })
 }
 
 /** Запросы, для которых нужен экран. Остальные не трогают экран вообще. */

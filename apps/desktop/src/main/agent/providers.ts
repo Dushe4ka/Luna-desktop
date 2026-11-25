@@ -75,6 +75,15 @@ function toWireMessage(message: ChatMessage): OpenAI.Chat.ChatCompletionMessageP
       }))
     }
   }
+  if (message.role === 'user' && message.images?.length) {
+    return {
+      role: 'user',
+      content: [
+        { type: 'text' as const, text: message.content },
+        ...message.images.map((url) => ({ type: 'image_url' as const, image_url: { url, detail: 'auto' as const } }))
+      ]
+    }
+  }
   return { role: message.role as 'system' | 'user' | 'assistant', content: message.content }
 }
 
