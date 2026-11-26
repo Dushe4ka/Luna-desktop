@@ -31,6 +31,7 @@ import {
   type ModelProvider
 } from './agent'
 import { readSecret, saveSecret } from './secrets'
+import { findProvider } from '../shared/providers'
 import {
   captureWindow,
   findAppWindow,
@@ -124,17 +125,35 @@ function memoryAccess() {
   }
 }
 
+/** Имя записи в Keychain для ключа провайдера. У OpenAI сохраняем прежнее имя. */
+function keyAccount(providerId: string): string {
+  return providerId === 'openai' ? 'openai' : `provider-${providerId}`
+}
+
 async function getProvider(): Promise<ModelProvider | null> {
   if (provider || providerError) return provider
-  // Настройки задают провайдер и модель; переменные окружения важнее (для разработки).
+  // Настройки задают провайдер, адрес и модель; переменные окружения важнее (для разработки).
   const s = getSettings()
-  const config = readProviderConfig({ LUNA_PROVIDER: s.provider, LUNA_MODEL: s.model, ...process.env })
-  if (config.provider === 'openai' && !config.apiKey) {
-    config.apiKey = (await readSecret('openai')) ?? ''
+  const info = findProvider(s.provider)
+  const config = readProviderConfig({
+    LUNA_PROVIDER: s.provider,
+    LUNA_MODEL: s.model,
+    LUNA_BASE_URL: s.baseURL || undefined,
+    ...process.env
+  })
+  if (!config.model) {
+    providerError = 'Укажите модель в настройках.'
+    return null
   }
-  if (config.provider === 'openai' && !config.apiKey) {
-    providerError =
-      'Ключ OpenAI не найден. Сохраните его в Keychain: security add-generic-password -s luna-desktop -a openai -w ВАШ_КЛЮЧ'
+  if (!config.baseURL) {
+    providerError = 'Укажите адрес сервера в настройках.'
+    return null
+  }
+  if (info?.needsKey && !config.apiKey) {
+    config.apiKey = (await readSecret(keyAccount(config.provider))) ?? ''
+  }
+  if (info?.needsKey && !config.apiKey) {
+    providerError = `Ключ для «${info.name}» не найден. Введите его в настройках.`
     return null
   }
   provider = createProvider(config)
@@ -176,7 +195,8 @@ async function runTool(name: string, args: Record<string, unknown>): Promise<str
   const result = await executeAction(name, args, {
     foreground: foreground ? { app: foreground.app, windowId: foreground.windowId } : null,
     memory: memoryAccess(),
-    explicitMemory: explicitThisTurn
+    explicitMemory: explicitThisTurn,
+    search: { provider: getSettings().searchProvider, searxngURL: getSettings().searxngURL, model: getSettings().model }
   })
   const failed = result.startsWith('Не удалось') || result.startsWith('Скрипт не выполнен') || result.startsWith('Не удалось запустить')
   // В журнал — только описание действия, без содержимого файлов и вывода команд.
@@ -412,7 +432,7 @@ function registerIpc(): void {
   })
   ipcMain.handle(IPC.settingsGet, async () => {
     const s = getSettings()
-    return { ...s, hasOpenAIKey: await hasOpenAIKey() }
+    return { ...s, hasOpenAIKey: await hasOpenAIKey(), hasKey: (await readSecret(keyAccount(s.provider))) !== null }
   })
   ipcMain.handle(IPC.settingsSave, async (_event, input: Partial<Settings> & { confirmFull?: boolean }) => {
     const before = getSettings()
@@ -433,7 +453,37 @@ function registerIpc(): void {
     }
     update({ mode: next.mode, fullAccess: next.accessLevel === 'full' })
     syncVault()
-    return { ...next, hasOpenAIKey: await hasOpenAIKey() }
+    return { ...next, hasOpenAIKey: await hasOpenAIKey(), hasKey: (await readSecret(keyAccount(next.provider))) !== null }
+  })
+  ipcMain.handle(IPC.settingsProviderKey, async (_event, providerId: string, value: string) => {
+    const key = String(value ?? '').trim()
+    if (!findProvider(providerId)?.needsKey || key.length < 8 || key.length > 500) return false
+    const ok = await saveSecret(keyAccount(providerId), key)
+    if (ok) {
+      provider = null
+      providerError = null
+    }
+    return ok
+  })
+  ipcMain.handle(IPC.settingsHasKey, async (_event, providerId: string) => {
+    return (await readSecret(keyAccount(providerId))) !== null
+  })
+  ipcMain.handle(IPC.settingsTest, async () => {
+    const s = getSettings()
+    const info = findProvider(s.provider)
+    const base = s.baseURL || info?.baseURL || ''
+    if (!base) return { ok: false, message: 'Адрес не задан.' }
+    const key = info?.needsKey ? (await readSecret(keyAccount(s.provider))) ?? '' : ''
+    try {
+      const res = await fetch(`${base.replace(/\/$/, '')}/models`, {
+        headers: key ? { Authorization: `Bearer ${key}` } : {},
+        signal: AbortSignal.timeout(10000)
+      })
+      if (res.ok) return { ok: true, message: 'Подключение работает.' }
+      return { ok: false, message: `Сервер ответил ${res.status}. Проверьте ключ и адрес.` }
+    } catch (error) {
+      return { ok: false, message: `Сервер недоступен: ${error instanceof Error ? error.message.slice(0, 120) : String(error)}` }
+    }
   })
   ipcMain.handle(IPC.settingsKey, async (_event, value: string) => {
     const key = String(value ?? '').trim()

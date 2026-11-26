@@ -8,7 +8,8 @@ import { readSecret } from './secrets'
  * Настройки Луны (файл settings.json в папке данных приложения).
  * Ключи провайдеров сюда не пишем: они лежат в Keychain.
  */
-export type ProviderId = 'openai' | 'ollama'
+export type ProviderId = string
+export type SearchId = 'wikipedia' | 'searxng' | 'openai'
 export type AccessMode = 'observe' | 'assist'
 export type AccessLevel = 'ask' | 'safe' | 'allowlist' | 'full'
 export type Persona = 'female' | 'male'
@@ -16,6 +17,12 @@ export type Persona = 'female' | 'male'
 export interface Settings {
   provider: ProviderId
   model: string
+  /** Адрес провайдера (нужен для «своего сервера» или своего адреса). Пусто — из каталога. */
+  baseURL: string
+  /** Поиск в интернете. */
+  searchProvider: SearchId
+  /** Адрес своего SearXNG. */
+  searxngURL: string
   vaultDir: string
   excludedApps: string[]
   mode: AccessMode
@@ -26,13 +33,16 @@ export interface Settings {
   allowlist: string[]
 }
 
-const PROVIDERS: ProviderId[] = ['openai', 'ollama']
+import { PROVIDERS } from '../shared/providers'
 const MODES: AccessMode[] = ['observe', 'assist']
 const LEVELS: AccessLevel[] = ['ask', 'safe', 'allowlist', 'full']
 
 export const DEFAULT_SETTINGS: Settings = {
   provider: 'openai',
   model: 'gpt-4.1-mini',
+  baseURL: '',
+  searchProvider: 'wikipedia',
+  searxngURL: '',
   vaultDir: join(homedir(), 'Documents', 'Obsidian Vault', 'Память Luna'),
   excludedApps: ['1Password', 'Bitwarden', 'Keychain Access', 'Связка ключей', 'Электронный ключ'],
   mode: 'assist',
@@ -68,8 +78,11 @@ export function saveSettings(patch: Partial<Settings>): Settings {
 /** Проверяем значения из интерфейса: лишнего не пропускаем. */
 function sanitize(input: Settings): Settings {
   return {
-    provider: PROVIDERS.includes(input.provider) ? input.provider : DEFAULT_SETTINGS.provider,
-    model: String(input.model ?? '').trim().slice(0, 80) || DEFAULT_SETTINGS.model,
+    provider: PROVIDERS.some((p) => p.id === input.provider) ? input.provider : DEFAULT_SETTINGS.provider,
+    model: String(input.model ?? '').trim().slice(0, 80),
+    baseURL: String(input.baseURL ?? '').trim().slice(0, 300),
+    searchProvider: ['wikipedia', 'searxng', 'openai'].includes(String(input.searchProvider)) ? input.searchProvider : DEFAULT_SETTINGS.searchProvider,
+    searxngURL: String(input.searxngURL ?? '').trim().slice(0, 300),
     vaultDir: String(input.vaultDir ?? '').trim().slice(0, 500) || DEFAULT_SETTINGS.vaultDir,
     excludedApps: (Array.isArray(input.excludedApps) ? input.excludedApps : [])
       .map((a) => String(a).trim().slice(0, 80))

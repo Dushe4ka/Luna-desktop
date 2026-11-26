@@ -9,8 +9,11 @@ export type PanelView = 'menu' | 'input' | 'memory' | 'settings'
 
 /** Настройки для экрана. Ключ отдаём только признаком «сохранён». */
 export interface SettingsData {
-  provider: 'openai' | 'ollama'
+  provider: string
   model: string
+  baseURL: string
+  searchProvider: 'wikipedia' | 'searxng' | 'openai'
+  searxngURL: string
   vaultDir: string
   excludedApps: string[]
   mode: 'observe' | 'assist'
@@ -18,6 +21,8 @@ export interface SettingsData {
   persona: 'female' | 'male'
   allowlist: string[]
   hasOpenAIKey: boolean
+  /** Ключ сохранён для выбранного провайдера. */
+  hasKey: boolean
 }
 
 /** Режимы доступа из спеки (§6). В фазе 1 это только переключатель отображения. */
@@ -77,7 +82,10 @@ export const IPC = {
   memoryDelete: 'luna:memory-delete',
   settingsGet: 'luna:settings-get',
   settingsSave: 'luna:settings-save',
-  settingsKey: 'luna:settings-key'
+  settingsKey: 'luna:settings-key',
+  settingsProviderKey: 'luna:settings-provider-key',
+  settingsTest: 'luna:settings-test',
+  settingsHasKey: 'luna:settings-has-key'
 } as const
 
 /** API, который мост открывает интерфейсу через window.luna. */
@@ -97,4 +105,7 @@ export interface LunaAPI {
   getSettings(): Promise<SettingsData>
   saveSettings(patch: Partial<Omit<SettingsData, 'hasOpenAIKey'>> & { confirmFull?: boolean }): Promise<SettingsData>
   saveOpenAIKey(value: string): Promise<boolean>
+  saveProviderKey(providerId: string, value: string): Promise<boolean>
+  hasProviderKey(providerId: string): Promise<boolean>
+  testProvider(): Promise<{ ok: boolean; message: string }>
 }

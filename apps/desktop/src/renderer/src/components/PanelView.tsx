@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import type { LunaSnapshot, MemorySnapshot, MenuActionId, PanelView as View, SettingsData } from '../../../shared/luna'
+import { PROVIDERS, findProvider } from '../../../shared/providers'
 
 const MENU_ITEMS: { id: MenuActionId; label: string; hint?: string; danger?: boolean }[] = [
   { id: 'history', label: 'Память и задачи', hint: '⌘H' },
@@ -241,6 +242,7 @@ function SettingsView() {
   const [excludedDraft, setExcludedDraft] = useState('')
   const [keyDraft, setKeyDraft] = useState('')
   const [consentFull, setConsentFull] = useState(false)
+  const [test, setTest] = useState('')
   const [ruleDraft, setRuleDraft] = useState('')
 
   useEffect(() => {
@@ -269,9 +271,9 @@ function SettingsView() {
   }
 
   const saveKey = async (): Promise<void> => {
-    const ok = await window.luna.saveOpenAIKey(keyDraft)
+    const ok = await window.luna.saveProviderKey(data.provider, keyDraft)
     setKeyDraft('')
-    setStatus(ok ? 'Ключ сохранён в Keychain' : 'Ключ не похож на ключ OpenAI (начинается с sk-)')
+    setStatus(ok ? 'Ключ сохранён в Keychain' : 'Ключ не принят: проверьте, что он полный')
     void window.luna.getSettings().then(setData)
   }
 
@@ -289,42 +291,82 @@ function SettingsView() {
             <option value="male">Мужской</option>
           </select>
         </div>
-        <label className="field">
-          <span>Модель</span>
+        <div className="field">
+          <span>Модель и сервер</span>
           <select
             value={data.provider}
             onChange={(e) => {
-              const provider = e.target.value as SettingsData['provider']
-              // При смене провайдера подставляем его модель по умолчанию.
-              void save({ provider, model: provider === 'ollama' ? 'qwen3-vl:8b' : 'gpt-4.1-mini' })
+              const info = findProvider(e.target.value)
+              // При смене сервиса подставляем его адрес и модель по умолчанию.
+              void save({ provider: e.target.value, baseURL: '', model: info?.defaultModel ?? '' })
+              setTest('')
             }}
           >
-            <option value="openai">OpenAI (облако)</option>
-            <option value="ollama">Ollama (на этом Mac)</option>
+            {PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.verified ? '' : ' · адрес проверить'}
+              </option>
+            ))}
           </select>
-        </label>
+          <span className="hint">{findProvider(data.provider)?.note}</span>
+        </div>
         <label className="field">
           <span>Название модели</span>
           <input
             key={`${data.provider}-${data.model}`}
             defaultValue={data.model}
-            onBlur={(e) => e.target.value !== data.model && void save({ model: e.target.value })}
+            placeholder="например, gpt-4.1-mini или qwen3-vl:8b"
+            onBlur={(e) => e.target.value !== data.model && void save({ model: e.target.value.trim() })}
           />
         </label>
-        <div className="field">
-          <span>Ключ OpenAI</span>
-          <div className="row-inline">
-            <input
-              type="password"
-              placeholder={data.hasOpenAIKey ? 'Ключ сохранён — введите новый, чтобы заменить' : 'Вставьте ключ sk-…'}
-              value={keyDraft}
-              onChange={(e) => setKeyDraft(e.target.value)}
-              autoComplete="off"
-            />
-            <button onClick={() => void saveKey()} disabled={!keyDraft.trim()}>
-              Сохранить
-            </button>
+        <label className="field">
+          <span>Адрес сервера (пусто — по умолчанию)</span>
+          <input
+            key={`url-${data.provider}-${data.baseURL}`}
+            defaultValue={data.baseURL}
+            placeholder={findProvider(data.provider)?.baseURL || 'https://…/v1'}
+            onBlur={(e) => e.target.value.trim() !== data.baseURL && void save({ baseURL: e.target.value.trim() })}
+          />
+        </label>
+        {findProvider(data.provider)?.needsKey && (
+          <div className="field">
+            <span>Ключ для «{findProvider(data.provider)?.name}»</span>
+            <div className="row-inline">
+              <input
+                type="password"
+                placeholder={data.hasKey ? 'Ключ сохранён — введите новый, чтобы заменить' : 'Вставьте ключ'}
+                value={keyDraft}
+                onChange={(e) => setKeyDraft(e.target.value)}
+                autoComplete="off"
+              />
+              <button onClick={() => void saveKey()} disabled={keyDraft.trim().length < 8}>
+                Сохранить
+              </button>
+            </div>
           </div>
+        )}
+        <div className="field">
+          <span>Проверка</span>
+          <div className="row-inline">
+            <button onClick={() => void window.luna.testProvider().then((r) => setTest(r.message))}>Проверить подключение</button>
+            <span className="hint">{test}</span>
+          </div>
+        </div>
+        <div className="field">
+          <span>Поиск в интернете</span>
+          <select value={data.searchProvider} onChange={(e) => void save({ searchProvider: e.target.value as SettingsData['searchProvider'] })}>
+            <option value="wikipedia">Википедия (бесплатно, без ключа)</option>
+            <option value="searxng">Свой SearXNG (открытый, бесплатно)</option>
+            <option value="openai">Поиск OpenAI (нужен ключ OpenAI)</option>
+          </select>
+          {data.searchProvider === 'searxng' && (
+            <input
+              key={`sx-${data.searxngURL}`}
+              defaultValue={data.searxngURL}
+              placeholder="http://127.0.0.1:8888"
+              onBlur={(e) => e.target.value.trim() !== data.searxngURL && void save({ searxngURL: e.target.value.trim() })}
+            />
+          )}
         </div>
         <label className="field">
           <span>Папка Obsidian (зеркало памяти)</span>

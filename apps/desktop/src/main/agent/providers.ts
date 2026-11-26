@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import type { ChatMessage, ModelEvent, ModelProvider, ToolSpec } from './types'
+import { findProvider } from '../../shared/providers'
 
 /**
  * Адаптер для любого сервера с протоколом OpenAI Chat Completions:
@@ -87,29 +88,27 @@ function toWireMessage(message: ChatMessage): OpenAI.Chat.ChatCompletionMessageP
   return { role: message.role as 'system' | 'user' | 'assistant', content: message.content }
 }
 
-/** Настройки из переменных окружения. Ключи в файлы не пишем (в фазе 2; Keychain — позже). */
+/** Настройки подключения: провайдер из каталога, адрес, модель и ключ. */
 export interface ProviderConfig {
-  provider: 'openai' | 'ollama'
+  provider: string
   model: string
   apiKey: string
   baseURL?: string
 }
 
+/**
+ * Собирает настройки из переменных окружения (для разработки) и значений по умолчанию каталога.
+ * Настройки из интерфейса подставляются в main/index.ts и имеют приоритет над каталогом.
+ */
 export function readProviderConfig(env: NodeJS.ProcessEnv): ProviderConfig {
-  const provider = env.LUNA_PROVIDER === 'ollama' ? 'ollama' : 'openai'
-  if (provider === 'openai') {
-    return {
-      provider,
-      model: env.LUNA_MODEL || 'gpt-4.1-mini',
-      apiKey: env.OPENAI_API_KEY || '',
-      baseURL: env.LUNA_OPENAI_URL || undefined
-    }
-  }
+  const id = env.LUNA_PROVIDER || 'openai'
+  const info = findProvider(id) ?? findProvider('openai')!
+  const apiKey = info.id === 'ollama' ? 'ollama' : env.LUNA_API_KEY || (info.id === 'openai' ? env.OPENAI_API_KEY || '' : '')
   return {
-    provider,
-    model: env.LUNA_MODEL || 'qwen3-vl:8b',
-    apiKey: 'ollama', // Ollama не проверяет ключ, но SDK требует значение
-    baseURL: env.LUNA_OLLAMA_URL || 'http://127.0.0.1:11434/v1'
+    provider: info.id,
+    model: env.LUNA_MODEL || info.defaultModel,
+    apiKey,
+    baseURL: env.LUNA_BASE_URL || info.baseURL
   }
 }
 

@@ -10,6 +10,14 @@ import {
   snapshotTool,
   webSearchTool
 } from './desktop-tools'
+import { searxngSearch, wikipediaSearch } from './search'
+
+/** Поиск по настройкам: Википедия (без ключа), свой SearXNG или OpenAI. */
+export function runWebSearch(query: string, search: { provider?: string; searxngURL?: string; model?: string } = {}): Promise<string> {
+  if (search.provider === 'searxng') return searxngSearch(query, search.searxngURL ?? '')
+  if (search.provider === 'openai') return webSearchTool(query, search.model || 'gpt-4.1-mini')
+  return wikipediaSearch(query)
+}
 
 /** Разбор аргументов инструментов интерфейса и вызов нужной функции. */
 export function desktopDispatch(name: string, args: Record<string, unknown>, ctx: ActionContext): Promise<string> {
@@ -33,7 +41,7 @@ export function desktopDispatch(name: string, args: Record<string, unknown>, ctx
     case 'clipboard_set':
       return clipboardSetTool(String(args.text ?? ''))
     case 'web_search':
-      return webSearchTool(str('query'), 'gpt-4.1-mini')
+      return runWebSearch(str('query'), ctx.search)
     default:
       return Promise.resolve(`Неизвестный инструмент: ${name}`)
   }

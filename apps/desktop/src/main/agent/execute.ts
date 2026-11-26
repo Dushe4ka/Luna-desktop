@@ -13,6 +13,8 @@ export interface ActionContext {
   memory: MemoryAccess
   /** Пользователь прямо попросил «запомни» — тогда факт сохраняется как явный. */
   explicitMemory: boolean
+  /** Настройки поиска в интернете. */
+  search?: { provider: string; searxngURL: string; model: string }
 }
 
 /** Узкий интерфейс памяти для ядра агента (реализует memory/store.ts). */
