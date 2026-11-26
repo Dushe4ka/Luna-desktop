@@ -606,3 +606,37 @@ input {
   font-size: 12px;
   color: #f472b6;
 }
+
+.reply-body {
+  display: grid;
+  gap: 8px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.reply-body p {
+  margin: 0;
+}
+
+.reply-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 5px;
+}
+
+.reply-list li {
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+}
+
+.reply-body code {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.07);
+}

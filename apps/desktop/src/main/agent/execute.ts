@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process'
 import { findEditable, MAX_TEXT_CHARS, pressInWindow, typeIntoRef } from '../context/input'
 import { isSensitive } from '../memory/policy'
 import { runAppleScript } from './applescript'
+import { desktopDispatch } from './desktop-dispatch'
 import { editFileTool, fetchUrlTool, listDirTool, readFileTool, runCommandTool, searchFilesTool, writeFileTool } from './system-tools'
 
 /** Выполнение действий на компьютере через agent-desktop. Вызывается только после подтверждения. */
@@ -35,6 +36,9 @@ export function executeAction(name: string, args: Record<string, unknown>, ctx: 
   if (name === 'list_dir') return Promise.resolve(listDirTool(String(args.path ?? '')))
   if (name === 'search_files') return searchFilesTool(String(args.pattern ?? ''), String(args.path ?? ''))
   if (name === 'fetch_url') return fetchUrlTool(String(args.url ?? ''))
+  if (name.startsWith('desktop_') || name.startsWith('clipboard_') || name === 'web_search') {
+    return desktopDispatch(name, args, ctx)
+  }
   if (name === 'create_task' || name === 'update_task' || name === 'list_tasks' || name === 'search_memory' || name === 'remember') {
     return Promise.resolve(memoryTool(name, args, ctx))
   }

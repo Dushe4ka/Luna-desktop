@@ -1,4 +1,4 @@
-import { execFile, spawn } from 'node:child_process'
+import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { expandPath } from './risk'
@@ -76,11 +76,22 @@ export function searchFilesTool(pattern: string, dir: string): Promise<string> {
   })
 }
 
+/** Запущенные команды: кнопка «Стоп» останавливает их все. */
+const running = new Set<ChildProcess>()
+
+export function killRunningCommands(): number {
+  const count = running.size
+  for (const child of running) child.kill('SIGKILL')
+  running.clear()
+  return count
+}
+
 /** Командная строка. Команда идёт через zsh; вызывается только после решения пользователя. */
 export function runCommandTool(command: string, cwd: string | undefined): Promise<{ text: string; code: number | null }> {
   const dir = cwd ? expandPath(cwd) : process.env.HOME || '/'
   return new Promise((resolve) => {
     const child = spawn('/bin/zsh', ['-lc', command], { cwd: dir, env: process.env })
+    running.add(child)
     let out = ''
     const timer = setTimeout(() => child.kill('SIGKILL'), CMD_TIMEOUT_MS)
     child.stdout.on('data', (c: Buffer) => (out += c.toString()))
@@ -90,6 +101,7 @@ export function runCommandTool(command: string, cwd: string | undefined): Promis
       resolve({ text: `Не удалось запустить команду: ${error.message}`, code: null })
     })
     child.on('close', (code) => {
+      running.delete(child)
       clearTimeout(timer)
       const label = `Вывод команды (код ${code ?? 'нет'})`
       resolve({ text: asData(label, out || '(нет вывода)'), code })

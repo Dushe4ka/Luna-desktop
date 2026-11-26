@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement } from 'react'
 import type { LunaSnapshot, MemorySnapshot, MenuActionId, PanelView as View, SettingsData } from '../../../shared/luna'
 
 const MENU_ITEMS: { id: MenuActionId; label: string; hint?: string; danger?: boolean }[] = [
@@ -143,7 +143,7 @@ function InputPanel({
         </div>
       )}
       <div className="reply" aria-live="polite">
-        {reply ? reply : <span className="muted">Напишите запрос. Голос подключим позже.</span>}
+        {reply ? <Reply text={reply} /> : <span className="muted">Напишите запрос. Голос подключим позже.</span>}
       </div>
       <div className="composer">
         <input
@@ -429,5 +429,51 @@ function SettingsView() {
         </div>
       </div>
     </div>
+  )
+}
+
+/** Ответ: абзацы, списки из строк «- », жирный текст, блоки кода. Без сторонних библиотек. */
+function Reply({ text }: { text: string }) {
+  const blocks: ReactElement[] = []
+  const lines = text.split('\n')
+  let list: string[] = []
+  let key = 0
+  const flush = (): void => {
+    if (list.length) {
+      blocks.push(
+        <ul className="reply-list" key={`l${key++}`}>
+          {list.map((item, i) => (
+            <li key={i}>{inline(item)}</li>
+          ))}
+        </ul>
+      )
+      list = []
+    }
+  }
+  for (const raw of lines) {
+    const line = raw.trimEnd()
+    if (/^\s*[-•*]\s+/.test(line)) {
+      list.push(line.replace(/^\s*[-•*]\s+/, ''))
+      continue
+    }
+    flush()
+    if (line.trim() === '') continue
+    blocks.push(<p key={`p${key++}`}>{inline(line)}</p>)
+  }
+  flush()
+  return <div className="reply-body">{blocks}</div>
+}
+
+/** **жирный** и `код` внутри строки. */
+function inline(text: string): ReactElement {
+  const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g)
+  return (
+    <>
+      {parts.map((part, i) => {
+        if (part.startsWith('**') && part.endsWith('**')) return <strong key={i}>{part.slice(2, -2)}</strong>
+        if (part.startsWith('`') && part.endsWith('`')) return <code key={i}>{part.slice(1, -1)}</code>
+        return <span key={i}>{part}</span>
+      })}
+    </>
   )
 }

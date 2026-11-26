@@ -42,6 +42,7 @@ import {
   type FocusedWindow
 } from './context/screen'
 import { journal } from './journal'
+import { killRunningCommands } from './agent/system-tools'
 import { assessRisk } from './agent/risk'
 import { MemoryStore } from './memory/store'
 import { buildMemoryContext, isExplicitMemoryRequest } from './memory/policy'
@@ -341,6 +342,7 @@ async function compressIfLong(current: ModelProvider): Promise<void> {
 /** Останавливает ответ и отменяет все ожидающие подтверждения. */
 function stopTurn(): void {
   if (!activeTurn && pendingApprovals.size === 0) return
+  killRunningCommands()
   activeTurn?.abort()
   activeTurn = null
   for (const [id, pending] of pendingApprovals) {

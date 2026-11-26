@@ -6,6 +6,51 @@ import type { ToolSpec } from './types'
  */
 export const TOOLS: ToolSpec[] = [
   {
+    name: "desktop_snapshot",
+    description: "Снять список элементов приложения или окна с ссылками (ref). Вызывай перед нажатием или вводом, ссылки работают только в своём снимке.",
+    parameters: { type: 'object', properties: {"app": {"type": "string"}, "window_id": {"type": "string"}}, required: [], additionalProperties: false }
+  },
+  {
+    name: "desktop_click",
+    description: "Нажать элемент по ссылке из снимка (кнопка, ссылка, пункт меню).",
+    parameters: { type: 'object', properties: {"ref": {"type": "string"}}, required: ["ref"], additionalProperties: false }
+  },
+  {
+    name: "desktop_scroll",
+    description: "Прокрутить элемент по ссылке из снимка.",
+    parameters: { type: 'object', properties: {"ref": {"type": "string"}, "direction": {"type": "string", "enum": ["up", "down", "left", "right"]}, "amount": {"type": "integer"}}, required: ["ref"], additionalProperties: false }
+  },
+  {
+    name: "desktop_list_windows",
+    description: "Показать открытые окна (id, приложение, заголовок).",
+    parameters: { type: 'object', properties: {"app": {"type": "string"}}, required: [], additionalProperties: false }
+  },
+  {
+    name: "desktop_focus_window",
+    description: "Вывести окно на передний план по id.",
+    parameters: { type: 'object', properties: {"window_id": {"type": "string"}}, required: ["window_id"], additionalProperties: false }
+  },
+  {
+    name: "desktop_press",
+    description: "Нажать клавишу или комбинацию в окне, например return, escape, tab, space, cmd+a, cmd+c, cmd+v, cmd+n.",
+    parameters: { type: 'object', properties: {"combo": {"type": "string"}, "window_id": {"type": "string"}}, required: ["combo"], additionalProperties: false }
+  },
+  {
+    name: "clipboard_get",
+    description: "Прочитать текст из буфера обмена.",
+    parameters: { type: 'object', properties: {}, required: [], additionalProperties: false }
+  },
+  {
+    name: "clipboard_set",
+    description: "Записать текст в буфер обмена.",
+    parameters: { type: 'object', properties: {"text": {"type": "string"}}, required: ["text"], additionalProperties: false }
+  },
+  {
+    name: "web_search",
+    description: "Поиск в интернете: актуальные сведения с источниками. Используй для новостей, цен, фактов, которых может не быть в памяти модели.",
+    parameters: { type: 'object', properties: {"query": {"type": "string"}}, required: ["query"], additionalProperties: false }
+  },
+  {
     name: 'run_command',
     description:
       'Выполнить команду в командной строке (zsh) на компьютере пользователя. Используй для поиска, сборки, git, установки пакетов и других задач. Не используй для того, что проще сделать другим инструментом.',
@@ -182,6 +227,15 @@ export const TOOLS: ToolSpec[] = [
  */
 export type Risk = 'read' | 'act' | 'send'
 export const RISK: Record<string, Risk> = {
+  desktop_snapshot: 'read',
+  desktop_list_windows: 'read',
+  web_search: 'read',
+  desktop_click: 'act',
+  desktop_scroll: 'act',
+  desktop_focus_window: 'act',
+  desktop_press: 'send',
+  clipboard_get: 'act',
+  clipboard_set: 'act',
   run_command: 'act',
   read_file: 'read',
   list_dir: 'read',
@@ -204,14 +258,21 @@ export const ACTION_TOOLS = new Set(Object.keys(RISK))
 
 /** Записи в задачи и чтение памяти: без подтверждения (обратимо и видно пользователю). */
 export const AUTO_TOOLS = new Set(['create_task', 'update_task'])
-export const READ_TOOLS = new Set(['list_tasks', 'search_memory', 'read_file', 'list_dir', 'search_files', 'fetch_url'])
+export const READ_TOOLS = new Set(['list_tasks', 'search_memory', 'read_file', 'list_dir', 'search_files', 'fetch_url', 'desktop_snapshot', 'desktop_list_windows', 'web_search'])
 /** Чтение файлов и веб-страниц: без вопроса на уровнях «безопасные» и «по списку». */
-export const FILE_READ_TOOLS = new Set(['read_file', 'list_dir', 'search_files', 'fetch_url'])
+export const FILE_READ_TOOLS = new Set(['read_file', 'list_dir', 'search_files', 'fetch_url', 'web_search'])
 
 /** Понятное описание действия для карточки подтверждения. */
 export function describeAction(name: string, args: Record<string, unknown>, targetApp: string | null): string {
   if (name === 'open_app') return `Открыть приложение «${String(args.app ?? '')}»`
   if (name === 'remember') return `Запомнить: «${String(args.text ?? '')}»?`
+  if (name === 'desktop_click') return `Нажать элемент ${String(args.ref ?? '')}${targetApp ? ` в «${targetApp}»` : ''}`
+  if (name === 'desktop_press') return `Нажать «${String(args.combo ?? '')}»${targetApp ? ` в «${targetApp}»` : ''}`
+  if (name === 'desktop_focus_window') return `Вывести окно ${String(args.window_id ?? '')} на передний план`
+  if (name === 'desktop_scroll') return `Прокрутить элемент ${String(args.ref ?? '')}`
+  if (name === 'clipboard_set') return `Записать в буфер обмена: «${String(args.text ?? '').slice(0, 80)}»`
+  if (name === 'clipboard_get') return 'Прочитать буфер обмена (он может содержать пароли или личное)'
+  if (name === 'web_search') return `Искать в интернете: «${String(args.query ?? '')}» (запрос уйдёт в OpenAI)`
   if (name === 'run_command') return `Выполнить команду: «${String(args.command ?? '').slice(0, 200)}»`
   if (name === 'write_file') return `Записать файл «${String(args.path ?? '')}»`
   if (name === 'edit_file') return `Изменить файл «${String(args.path ?? '')}»`
