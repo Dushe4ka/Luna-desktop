@@ -294,6 +294,7 @@ async function submit(text: string): Promise<void> {
       targetApp,
       images,
       memoryContext,
+      persona: getSettings().persona,
       canAutoApprove: (name, args) => {
         const s = getSettings()
         return autoApprove({

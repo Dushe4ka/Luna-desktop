@@ -28,6 +28,8 @@ export interface TurnOptions {
   images?: string[]
   /** Справка о памяти для системного промпта (не инструкции). */
   memoryContext?: string
+  /** Пол Луны (род слов о себе). */
+  persona?: 'female' | 'male'
   /** Можно ли выполнить без вопроса (уровень доступа, список разрешённых, «запомни»). */
   canAutoApprove: (name: string, args: Record<string, unknown>) => boolean
   onDelta: (fullTextSoFar: string) => void
@@ -45,10 +47,10 @@ export interface TurnOptions {
  * Возвращает итоговый текст ответа.
  */
 export async function runTurn(options: TurnOptions): Promise<string> {
-  const { provider, role, history, userText, tools, targetApp, images, memoryContext, canAutoApprove, onDelta, requestApproval, runTool, onEvent, signal } = options
+  const { provider, role, history, userText, tools, targetApp, images, memoryContext, persona, canAutoApprove, onDelta, requestApproval, runTool, onEvent, signal } = options
   history.push({ role: 'user', content: userText })
   const messages: ChatMessage[] = [
-    { role: 'system', content: memoryContext ? `${systemPrompt(role)}\n\n${memoryContext}` : systemPrompt(role) },
+    { role: 'system', content: memoryContext ? `${systemPrompt(role, persona)}\n\n${memoryContext}` : systemPrompt(role, persona) },
     ...history.slice(-HISTORY_LIMIT)
   ]
   // Картинка прикрепляется только к текущему вопросу; в историю она не попадает.

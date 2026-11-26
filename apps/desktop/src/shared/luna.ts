@@ -15,6 +15,7 @@ export interface SettingsData {
   excludedApps: string[]
   mode: 'observe' | 'assist'
   accessLevel: 'ask' | 'safe' | 'allowlist' | 'full'
+  persona: 'female' | 'male'
   allowlist: string[]
   hasOpenAIKey: boolean
 }

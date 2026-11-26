@@ -11,6 +11,7 @@ import { readSecret } from './secrets'
 export type ProviderId = 'openai' | 'ollama'
 export type AccessMode = 'observe' | 'assist'
 export type AccessLevel = 'ask' | 'safe' | 'allowlist' | 'full'
+export type Persona = 'female' | 'male'
 
 export interface Settings {
   provider: ProviderId
@@ -19,6 +20,8 @@ export interface Settings {
   excludedApps: string[]
   mode: AccessMode
   accessLevel: AccessLevel
+  /** Пол Луны: от него зависит род слов о себе и (позже) выбор голосов. */
+  persona: Persona
   /** Записи вида "open_app:Calculator" для уровня «по списку». */
   allowlist: string[]
 }
@@ -34,6 +37,7 @@ export const DEFAULT_SETTINGS: Settings = {
   excludedApps: ['1Password', 'Bitwarden', 'Keychain Access', 'Связка ключей', 'Электронный ключ'],
   mode: 'assist',
   accessLevel: 'ask',
+  persona: 'female',
   allowlist: []
 }
 
@@ -73,6 +77,7 @@ function sanitize(input: Settings): Settings {
       .slice(0, 50),
     mode: MODES.includes(input.mode) ? input.mode : DEFAULT_SETTINGS.mode,
     accessLevel: LEVELS.includes(input.accessLevel) ? input.accessLevel : DEFAULT_SETTINGS.accessLevel,
+    persona: input.persona === 'male' ? 'male' : 'female',
     allowlist: (Array.isArray(input.allowlist) ? input.allowlist : [])
       .map((a) => String(a).trim().slice(0, 120))
       .filter((a) => /^[a-z_]+:.+$/.test(a))

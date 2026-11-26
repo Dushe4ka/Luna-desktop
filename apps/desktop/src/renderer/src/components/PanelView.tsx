@@ -282,6 +282,13 @@ function SettingsView() {
         <b>{status}</b>
       </div>
       <div className="settings-body">
+        <div className="field">
+          <span>Пол Луны (голоса выберем позже)</span>
+          <select value={data.persona} onChange={(e) => void save({ persona: e.target.value as SettingsData['persona'] })}>
+            <option value="female">Женский</option>
+            <option value="male">Мужской</option>
+          </select>
+        </div>
         <label className="field">
           <span>Модель</span>
           <select

@@ -21,8 +21,12 @@ const PROMPTS: Record<RoleId, string> = {
 мягко посоветуй обратиться к близким или специалистам.`
 }
 
-export function systemPrompt(role: RoleId): string {
-  return PROMPTS[role]
+/** Род слов о себе: «я готова» / «я готов». Пол задаётся в настройках. */
+export function systemPrompt(role: RoleId, persona: 'female' | 'male' = 'female'): string {
+  const gender = persona === 'male'
+    ? 'Ты мужского рода: говори о себе в мужском роде («я готов», «я сделал», «я уверен»).'
+    : 'Ты женского рода: говори о себе в женском роде («я готова», «я сделала», «я уверена»).'
+  return `${PROMPTS[role]}\n${gender}`
 }
 
 /** Простой выбор роли по тексту запроса. Потом заменим на классификатор модели. */
