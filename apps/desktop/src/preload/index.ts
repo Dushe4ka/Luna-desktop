@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, type LunaAPI, type LunaSnapshot, type MenuActionId, type PanelView } from '../shared/luna'
+import { IPC, type LunaAPI, type LunaSnapshot, type MenuActionId, type PanelView, type TranscriptItem } from '../shared/luna'
 
 // Узкий мост: интерфейс получает только перечисленные функции, без прямого доступа к Node.js.
 const luna: LunaAPI = {
@@ -31,7 +31,13 @@ const luna: LunaAPI = {
   saveOpenAIKey: (value: string) => ipcRenderer.invoke(IPC.settingsKey, value),
   saveProviderKey: (providerId, value) => ipcRenderer.invoke(IPC.settingsProviderKey, providerId, value),
   hasProviderKey: (providerId) => ipcRenderer.invoke(IPC.settingsHasKey, providerId),
-  testProvider: () => ipcRenderer.invoke(IPC.settingsTest)
+  testProvider: () => ipcRenderer.invoke(IPC.settingsTest),
+  getTranscript: () => ipcRenderer.invoke(IPC.transcriptGet),
+  onTranscript: (callback) => {
+    const listener = (_event: unknown, items: TranscriptItem[]): void => callback(items)
+    ipcRenderer.on(IPC.transcript, listener)
+    return () => ipcRenderer.removeListener(IPC.transcript, listener)
+  }
 }
 
 contextBridge.exposeInMainWorld('luna', luna)

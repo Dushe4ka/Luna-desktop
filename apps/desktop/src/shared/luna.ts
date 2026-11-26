@@ -7,6 +7,14 @@ export type OrbState = 'idle' | 'listening' | 'thinking' | 'acting' | 'approval'
 /** Что показывает панель, которая открывается от значка. */
 export type PanelView = 'menu' | 'input' | 'memory' | 'settings'
 
+/** Сообщение в ленте полного окна. */
+export interface TranscriptItem {
+  id: number
+  role: 'user' | 'assistant'
+  text: string
+  ts: string
+}
+
 /** Настройки для экрана. Ключ отдаём только признаком «сохранён». */
 export interface SettingsData {
   provider: string
@@ -29,7 +37,7 @@ export interface SettingsData {
 export type AssistantMode = 'observe' | 'assist'
 
 /** Действия из стеклянного меню. */
-export type MenuActionId = 'history' | 'text' | 'listen' | 'mode' | 'settings' | 'pause' | 'quit'
+export type MenuActionId = 'history' | 'text' | 'listen' | 'mode' | 'settings' | 'pause' | 'quit' | 'window'
 
 /** Задача и запись памяти для экрана «Память и задачи». */
 export interface TaskItem {
@@ -85,7 +93,9 @@ export const IPC = {
   settingsKey: 'luna:settings-key',
   settingsProviderKey: 'luna:settings-provider-key',
   settingsTest: 'luna:settings-test',
-  settingsHasKey: 'luna:settings-has-key'
+  settingsHasKey: 'luna:settings-has-key',
+  transcriptGet: 'luna:transcript-get',
+  transcript: 'luna:transcript'
 } as const
 
 /** API, который мост открывает интерфейсу через window.luna. */
@@ -103,6 +113,8 @@ export interface LunaAPI {
   listMemory(): Promise<MemorySnapshot>
   deleteMemory(kind: 'task' | 'memory', id: string): void
   getSettings(): Promise<SettingsData>
+  getTranscript(): Promise<TranscriptItem[]>
+  onTranscript(callback: (items: TranscriptItem[]) => void): () => void
   saveSettings(patch: Partial<Omit<SettingsData, 'hasOpenAIKey'>> & { confirmFull?: boolean }): Promise<SettingsData>
   saveOpenAIKey(value: string): Promise<boolean>
   saveProviderKey(providerId: string, value: string): Promise<boolean>

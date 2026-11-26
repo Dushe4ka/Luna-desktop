@@ -17,7 +17,7 @@ let orbWindow: BrowserWindow | null = null
 let panelWindow: BrowserWindow | null = null
 
 /** Загружает нужный вид в одном и том же бандле интерфейса: через параметр ?view=. */
-function loadView(win: BrowserWindow, view: 'orb' | 'panel'): void {
+function loadView(win: BrowserWindow, view: 'orb' | 'panel' | 'main'): void {
   const devUrl = process.env['ELECTRON_RENDERER_URL']
   if (is.dev && devUrl) {
     void win.loadURL(`${devUrl}?view=${view}`)
@@ -77,6 +77,32 @@ export function createPanelWindow(): BrowserWindow {
   panelWindow.on('blur', () => hidePanel())
   panelWindow.on('closed', () => (panelWindow = null))
   return panelWindow
+}
+
+let mainWindow: BrowserWindow | null = null
+
+/** Полноценное окно Луны: обычное окно с рамкой, чат, задачи, память и настройки. */
+export function openMainWindow(): BrowserWindow {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show()
+    mainWindow.focus()
+    return mainWindow
+  }
+  mainWindow = new BrowserWindow({
+    width: 1120,
+    height: 740,
+    minWidth: 720,
+    minHeight: 520,
+    title: 'Луна',
+    titleBarStyle: 'hiddenInset',
+    backgroundColor: '#0b0d14',
+    show: false,
+    webPreferences: basePreferences()
+  })
+  loadView(mainWindow, 'main')
+  mainWindow.once('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('closed', () => (mainWindow = null))
+  return mainWindow
 }
 
 /** Ставит панель под видимым значком, выровненной по его правому краю. */

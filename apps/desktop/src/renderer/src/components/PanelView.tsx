@@ -9,6 +9,7 @@ const MENU_ITEMS: { id: MenuActionId; label: string; hint?: string; danger?: boo
   { id: 'mode', label: 'Режим' },
   { id: 'settings', label: 'Настройки', hint: '⌘,' },
   { id: 'pause', label: 'Пауза' },
+  { id: 'window', label: 'Открыть окно Луны', hint: '⌘O' },
   { id: 'quit', label: 'Выйти из Луны', hint: '⌘Q', danger: true }
 ]
 
@@ -164,7 +165,7 @@ function InputPanel({
 }
 
 /** Экран «Память и задачи»: задачи со статусами и записи памяти, с удалением. */
-function MemoryView() {
+export function MemoryView() {
   const [data, setData] = useState<MemorySnapshot>({ tasks: [], memories: [] })
 
   const load = (): void => {
@@ -236,7 +237,7 @@ const LEVEL_OPTIONS: { value: SettingsData['accessLevel']; label: string; hint: 
 ]
 
 /** Экран настроек: модель, Obsidian, исключённые приложения, режим и ключ OpenAI. */
-function SettingsView() {
+export function SettingsView() {
   const [data, setData] = useState<SettingsData | null>(null)
   const [status, setStatus] = useState<string>('')
   const [excludedDraft, setExcludedDraft] = useState('')
@@ -475,7 +476,7 @@ function SettingsView() {
 }
 
 /** Ответ: абзацы, списки из строк «- », жирный текст, блоки кода. Без сторонних библиотек. */
-function Reply({ text }: { text: string }) {
+export function Reply({ text }: { text: string }) {
   const blocks: ReactElement[] = []
   const lines = text.split('\n')
   let list: string[] = []

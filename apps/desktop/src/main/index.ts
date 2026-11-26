@@ -2,6 +2,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import {
+  openMainWindow,
   allWindows,
   createOrbWindow,
   createPanelWindow,
@@ -14,6 +15,7 @@ import {
   IPC,
   type AssistantMode,
   type LunaSnapshot,
+  type TranscriptItem,
   type MenuActionId,
   type OrbState
 } from '../shared/luna'
@@ -58,6 +60,15 @@ const HOTKEY = 'Alt+Space'
 const MODES: AssistantMode[] = ['observe', 'assist']
 
 let snapshot: LunaSnapshot = { state: 'idle', mode: 'assist', reply: null, screenNote: null, approval: null, fullAccess: false }
+/** Лента полного окна: реплики пользователя и ответы Луны. В памяти процесса. */
+const transcript: TranscriptItem[] = []
+let transcriptSeq = 0
+
+function addToTranscript(role: 'user' | 'assistant', text: string): void {
+  transcript.push({ id: ++transcriptSeq, role, text, ts: new Date().toISOString() })
+  if (transcript.length > 300) transcript.splice(0, transcript.length - 300)
+  for (const win of allWindows()) win.webContents.send(IPC.transcript, transcript)
+}
 let listenTimer: NodeJS.Timeout | null = null
 /** Окно, с которым работал пользователь до вызова Луны. Запоминается при открытии панели. */
 let foreground: FocusedWindow | null = null
@@ -244,6 +255,7 @@ async function submit(text: string): Promise<void> {
     return
   }
 
+  addToTranscript('user', trimmed)
   const role = pickRole(trimmed)
   setState('thinking')
   update({ reply: '', screenNote: null, approval: null })
@@ -337,12 +349,16 @@ async function submit(text: string): Promise<void> {
     if (activeTurn === controller) {
       activeTurn = null
       update({ state: 'idle' })
+      if (snapshot.reply) addToTranscript('assistant', snapshot.reply)
     }
     await compressIfLong(current)
   } catch (error) {
     if (activeTurn === controller) activeTurn = null
     const message = friendlyError(error)
-    if (message) update({ state: 'error', reply: message })
+    if (message) {
+      update({ state: 'error', reply: message })
+      addToTranscript('assistant', message)
+    }
   }
 }
 
@@ -406,6 +422,9 @@ function runAction(id: MenuActionId): void {
     case 'history':
       void openPanelFor('memory')
       return
+    case 'window':
+      openMainWindow()
+      return
     case 'settings':
       void openPanelFor('settings')
       return
@@ -425,6 +444,7 @@ function toggleInput(): void {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.snapshot, () => snapshot)
+  ipcMain.handle(IPC.transcriptGet, () => transcript)
   ipcMain.on(IPC.openPanel, (_event, view: 'menu' | 'input') => void openPanelFor(view))
   ipcMain.handle(IPC.memoryList, () => {
     const db = store
